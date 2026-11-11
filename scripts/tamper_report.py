@@ -3,7 +3,7 @@
     python scripts/tamper_report.py --root data/tamper --splits data/processed/splits.json \
         --out results/data/tamper --preview 50
 
-Writes report.json, report.md and preview/grid_XX.jpg (train/val only, stratified by op).
+Writes report.json, report.md and preview/{train,val}_XX.jpg (train/val only, stratified by op).
 Exit code 1 if any check fails.
 """
 

@@ -43,11 +43,20 @@ pytest -q
 python -c "from docguard.data.annotations import convert_mcocr_csv as c; \
   print(c('data/raw/mcocr/mcocr_train_df.csv', 'data/raw/mcocr/train_images', 'data/processed/annotations.jsonl'))"
 
+# Split chuẩn theo ảnh gốc, dùng chung cho OCR/KIE và tampering
+python scripts/make_splits.py --ann data/processed/annotations.jsonl --out data/processed/splits.json
+
+# Sinh tập giả mạo (font: 1 file .ttf hoặc thư mục để xoay vòng; cần đủ glyph tiếng Việt)
 python scripts/make_tamper_dataset.py --ann data/processed/annotations.jsonl \
-  --images data/raw/mcocr/train_images --out data/tamper --font path/to/Roboto-Regular.ttf
+  --splits data/processed/splits.json --images data/raw/mcocr/train_images \
+  --out data/tamper --font data/fonts --tampered-per-image 2 --tampered-per-image-train 4
+
+# Kiểm định: rò rỉ split, mask hợp lệ, tỉ lệ phép biến đổi, diện tích mask, ảnh preview (exit 1 nếu FAIL)
+python scripts/tamper_report.py --root data/tamper --splits data/processed/splits.json \
+  --out results/data/tamper --preview 50
 ```
 
-Converter giả định layout cột của bản public MC-OCR (`img_id`, `anno_polygons`, `anno_texts`, `anno_labels`). Hãy kiểm tra lại với bản bạn tải về.
+Converter đã được kiểm tra với bản public MC-OCR (cột `img_id`, `anno_polygons`, `anno_texts`, `anno_labels`). MC-OCR chỉ được dùng cho nghiên cứu, cần đăng ký với VNDAG (xem `data/raw/mcocr/README_VNDAG.md`).
 
 ### 2. Train → Export → Optimize
 

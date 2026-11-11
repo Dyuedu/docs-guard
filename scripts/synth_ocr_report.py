@@ -24,7 +24,7 @@ from PIL import Image
 from docguard.data.annotations import read_jsonl
 from docguard.data.splits import load_splits
 from docguard.data.synth_receipt import polygon_iou
-from docguard.data.synth_text import LineRenderer, ReceiptCorpus, filter_charset, load_vocab_set
+from docguard.data.synth_text import LineRenderer, ReceiptCorpus, filter_charset, heldout_only, load_vocab_set
 
 # Thresholds from intent/002-synth-ocr-data/spec.md
 MIN_LINES, MAX_IOU = 8, 0.1
@@ -57,6 +57,13 @@ def check_provenance(corpus_lines: list[str], train_texts: list[str], heldout_te
     overlap = sum(h in train for h in held)
     return leaked, {"heldout_texts": len(held), "heldout_in_train": overlap,
                     "heldout_overlap_ratio": overlap / len(held) if held else 0.0}
+
+
+def check_heldout_generated(generated_texts: list[str], train_texts: list[str], heldout_texts: list[str]) -> list[str]:
+    """AC-2 clause 2: generated texts (receipts + lines) must not reproduce val/test-only text
+    (> 3 chars after normalisation). Returns the offending normalised texts, sorted, unique."""
+    banned = heldout_only(train_texts, heldout_texts)
+    return sorted({n for n in (ReceiptCorpus.normalize(t) for t in generated_texts) if n in banned})
 
 
 def _split_texts(ann_path: Path, splits: dict, vocab: set[str]) -> tuple[list[str], list[str]]:
@@ -195,28 +202,31 @@ def main() -> int:
     corpus_lines = [l.rstrip("\n") for l in open(root / "corpus" / "receipt_lines.txt", encoding="utf-8") if l.strip()]
     fonts = sorted(str(f) for f in Path(args.fonts).glob("*.ttf"))
 
-    receipts, all_texts = {}, list(corpus_lines)
+    receipts, all_texts, generated = {}, list(corpus_lines), []
     for split in ("train", "val"):
         idx = root / "receipts" / split / "index.jsonl"
         if idx.exists():
             rows = _load_index(idx)
             receipts[split] = check_receipts(root / "receipts" / split, rows)
-            all_texts += receipts[split].pop("texts")
+            generated += receipts[split].pop("texts")
     lines = check_lines(root / "lines" / "val")
-    all_texts += lines.pop("texts")
+    generated += lines.pop("texts")
+    all_texts += generated
 
     bad_chars = check_charset(all_texts, vocab)
     train_texts, heldout_texts = _split_texts(Path(args.ann), splits, vocab)
     leaked, provenance = check_provenance(corpus_lines, train_texts, heldout_texts)
+    heldout_hits = check_heldout_generated(generated, train_texts, heldout_texts)
     ms = bench_line_renderer(corpus_lines, vocab, fonts)
     heights_ok = all(HEIGHT_RANGE[0] <= s["text_height_px_at_1024"]["p50"] <= HEIGHT_RANGE[1] for s in receipts.values())
 
     rep = {
         "splits_sha256": _sha(Path(args.splits)), "corpus_sha256": _sha(root / "corpus" / "receipt_lines.txt"),
-        "receipts": receipts, "lines": lines, "bad_chars": "".join(bad_chars), "leaked": leaked, "provenance": provenance, "line_render_ms": ms,
+        "receipts": receipts, "lines": lines, "bad_chars": "".join(bad_chars), "leaked": leaked, "provenance": provenance, "heldout_generated": heldout_hits, "line_render_ms": ms,
         "checks": {
             "charset": not bad_chars,
             "no_leak": not leaked,
+            "no_heldout_generated": not heldout_hits,
             "polygons_valid": bool(receipts) and all(s["n_errors"] == 0 for s in receipts.values()),
             "text_height": bool(receipts) and heights_ok,
             "lines_valid": lines["n"] > 0 and lines["n_errors"] == 0 and lines["non_blank_ratio"] >= 0.95,

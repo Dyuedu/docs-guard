@@ -72,8 +72,8 @@ def test_receipt_text_height_in_range(corpus):
 
 
 def test_receipt_polygon_matches_ink(corpus):
-    # the ink of each line must lie inside its own polygon: crop the polygon region and expect ink there,
-    # and expect (almost) no ink in a band just outside the polygon's top edge
+    # smoke check on the composed image: the first lines' bboxes contain dark ink. The full check
+    # (every quad on the paper and inked, 200 seeds) is tests/test_synth_receipt_overflow.py
     cfg = {**DEFAULT_CFG, "rotate90_prob": 0.0, "perspective_prob": 0.0, "elastic_prob": 0.0, "noise_prob": 0.0}
     (img, boxes), _ = _one(corpus, 1, cfg)
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)

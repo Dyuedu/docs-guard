@@ -30,16 +30,18 @@ import cv2
 from docguard.data.annotations import read_jsonl
 from docguard.data.splits import load_splits
 from docguard.data.synth_receipt import DEFAULT_CFG, render_receipt
-from docguard.data.synth_text import LineRenderer, ReceiptCorpus, filter_charset, load_vocab_set
+from docguard.data.synth_text import LineRenderer, ReceiptCorpus, filter_charset, heldout_only, load_vocab_set
 
 _W: dict = {}  # per-process worker state
 
 
-def load_corpus_dir(corpus_dir: str | Path) -> tuple[list[str], set[str]]:
+def load_corpus_dir(corpus_dir: str | Path) -> tuple[list[str], set[str], set[str]]:
     d = Path(corpus_dir)
     texts = [l.rstrip("\n") for l in open(d / "receipt_lines.txt", encoding="utf-8") if l.strip()]
     vocab = load_vocab_set(d / "vocab.txt")
-    return texts, vocab
+    bl = d / "heldout_blocklist.txt"
+    blocklist = {l.rstrip("\n") for l in open(bl, encoding="utf-8") if l.strip()} if bl.exists() else set()
+    return texts, vocab, blocklist
 
 
 def resolve_fonts(path: str | Path) -> list[str]:
@@ -56,30 +58,35 @@ def cmd_corpus(args) -> None:
     splits = load_splits(args.splits)
     vocab = load_vocab_set(args.vocab)
     samples = read_jsonl(args.ann)
-    texts, words = [], set()
+    texts, words, held = [], set(), []
     for s in samples:
         if s.image not in splits["train"]:
-            continue  # val/test texts must never enter the corpus (AC-2)
+            # val/test texts never enter the corpus (AC-2); they only feed the blocklist (clause 2)
+            if s.image in splits["val"] | splits["test"]:
+                held += [" ".join(filter_charset(b.text, vocab).split()) for b in s.boxes]
+            continue
         for b in s.boxes:
             t = " ".join(filter_charset(b.text, vocab).split())
             if t:
                 texts.append(t)
                 words.update(w for w in t.split() if len(w) > 1)
+    blocklist = sorted(heldout_only(texts, held))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    (out / "heldout_blocklist.txt").write_text("\n".join(blocklist) + "\n", encoding="utf-8")
     (out / "receipt_lines.txt").write_text("\n".join(texts) + "\n", encoding="utf-8")
     (out / "words.txt").write_text("\n".join(sorted(words)) + "\n", encoding="utf-8")
     (out / "vocab.txt").write_text(Path(args.vocab).read_text(encoding="utf-8"), encoding="utf-8")
     (out / "meta.json").write_text(json.dumps({"ann": args.ann, "splits": args.splits, "n_train_images": len(splits["train"]),
-                                               "n_lines": len(texts), "n_words": len(words)}, indent=1), encoding="utf-8")
-    print(f"corpus: {len(texts)} lines, {len(words)} words from {len(splits['train'])} train receipts -> {out}")
+                                               "n_lines": len(texts), "n_words": len(words), "n_blocklist": len(blocklist)}, indent=1), encoding="utf-8")
+    print(f"corpus: {len(texts)} lines, {len(words)} words from {len(splits['train'])} train receipts, {len(blocklist)} held-out-only texts blocked -> {out}")
 
 
 # --- receipts -------------------------------------------------------------------------------------
 
 def _init_receipts(corpus_dir, fonts, out_dir, cfg):
-    texts, vocab = load_corpus_dir(corpus_dir)
-    _W["corpus"] = ReceiptCorpus(texts, vocab, seed=0)
+    texts, vocab, blocklist = load_corpus_dir(corpus_dir)
+    _W["corpus"] = ReceiptCorpus(texts, vocab, blocklist=blocklist)
     _W["fonts"], _W["out"], _W["cfg"] = fonts, Path(out_dir), cfg
 
 
@@ -130,8 +137,8 @@ def cmd_receipts(args) -> None:
 # --- lines ----------------------------------------------------------------------------------------
 
 def generate_lines(corpus_dir, fonts, out_dir, n: int, seed: int, log=print) -> list[tuple[str, str]]:
-    texts, vocab = load_corpus_dir(corpus_dir)
-    corpus, renderer = ReceiptCorpus(texts, vocab, seed=0), LineRenderer(fonts)
+    texts, vocab, blocklist = load_corpus_dir(corpus_dir)
+    corpus, renderer = ReceiptCorpus(texts, vocab, blocklist=blocklist), LineRenderer(fonts)
     out = Path(out_dir)
     (out / "images").mkdir(parents=True, exist_ok=True)
     rng = random.Random(seed)
@@ -139,6 +146,8 @@ def generate_lines(corpus_dir, fonts, out_dir, n: int, seed: int, log=print) -> 
     t0 = time.perf_counter()
     for i in range(n):
         text = corpus.line(rng)[:40]
+        while corpus.blocked(text):  # truncation could still recreate a blocked text
+            text = corpus.line(rng)[:40]
         img = renderer.render(text, rng)
         name = f"images/{i:06d}.jpg"
         cv2.imwrite(str(out / name), cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, rng.randint(70, 95)])

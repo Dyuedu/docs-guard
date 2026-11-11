@@ -55,14 +55,27 @@ def filter_charset(text: str, vocab: set[str]) -> str:
     return "".join(c for c in text if c == " " or c in vocab)
 
 
+def heldout_only(train_texts: list[str], heldout_texts: list[str], min_len: int = 4) -> set[str]:
+    """Normalised val/test texts (>= min_len chars) that never occur in train (spec AC-2, clause 2)."""
+    norm = ReceiptCorpus.normalize
+    train = {norm(t) for t in train_texts}
+    return {h for h in (norm(t) for t in heldout_texts) if len(h) >= min_len and h not in train}
+
+
+_MAX_REROLL = 200
+
+
 class ReceiptCorpus:
     """Generates receipt-like lines/receipts from MC-OCR *train* texts + templates.
 
-    Only texts of the train split may be passed in (spec AC-2).
+    Only texts of the train split may be passed in (spec AC-2). ``blocklist`` holds normalised
+    held-out-only texts (see ``heldout_only``); generated lines/receipts that would reproduce one
+    are re-drawn, so template output never recreates val/test-only text (AC-2, clause 2).
     """
 
-    def __init__(self, train_texts: list[str], vocab: set[str], seed: int = 0):
+    def __init__(self, train_texts: list[str], vocab: set[str], seed: int = 0, blocklist: set[str] | None = None):
         self.vocab = vocab
+        self.blocklist = frozenset(blocklist or ())
         texts = [filter_charset(t, vocab).strip() for t in train_texts]
         texts = [re.sub(r"\s+", " ", t) for t in texts if t]
         self.sellers = [t for t in texts if not _DIGIT.search(t) and 3 <= len(t) <= 32 and t.upper() == t] or ["CO.OP MART"]
@@ -70,7 +83,6 @@ class ReceiptCorpus:
         words = {w for t in texts for w in t.split() if len(w) > 1 and not _DIGIT.search(w)}
         self.words = sorted(words) or ["hàng", "tiền"]
         self.items = [filter_charset(x, vocab) for x in _ITEMS]
-        self._init_rng = random.Random(seed)
 
     # --- primitives ---------------------------------------------------------------------------
 
@@ -80,6 +92,9 @@ class ReceiptCorpus:
 
     def _ok(self, text: str) -> str:
         return filter_charset(text, self.vocab)
+
+    def blocked(self, text: str) -> bool:
+        return bool(self.blocklist) and self.normalize(text) in self.blocklist
 
     def amount(self, rng: random.Random, big: bool = False) -> str:
         v = rng.choice([rng.randint(1, 99) * 1000, rng.randint(1, 999) * 1000, rng.randint(1, 9999) * 500])
@@ -136,6 +151,21 @@ class ReceiptCorpus:
     # --- public API -----------------------------------------------------------------------------
 
     def line(self, rng: random.Random) -> str:
+        for _ in range(_MAX_REROLL):
+            s = self._line(rng)
+            if not self.blocked(s):
+                return s
+        raise RuntimeError("blocklist rejects every generated line")
+
+    def receipt(self, rng: random.Random) -> list[tuple[str, str]]:
+        """Lines of one receipt, top to bottom, as (text, label). Always >= 8 lines."""
+        for _ in range(_MAX_REROLL):  # re-draw the whole receipt so totals stay consistent
+            rows = self._receipt(rng)
+            if not any(self.blocked(t) for t, _ in rows):
+                return rows
+        raise RuntimeError("blocklist rejects every generated receipt")
+
+    def _line(self, rng: random.Random) -> str:
         r = rng.random()
         if r < 0.18:
             s = self.item_name(rng)
@@ -160,8 +190,7 @@ class ReceiptCorpus:
         s = self._ok(s).strip()
         return s if s else "0"
 
-    def receipt(self, rng: random.Random) -> list[tuple[str, str]]:
-        """Lines of one receipt, top to bottom, as (text, label). Always >= 8 lines."""
+    def _receipt(self, rng: random.Random) -> list[tuple[str, str]]:
         rows: list[tuple[str, str]] = [(self.seller(rng), "SELLER")]
         for _ in range(rng.randint(1, 2)):
             rows.append((self.address(rng), "ADDRESS"))

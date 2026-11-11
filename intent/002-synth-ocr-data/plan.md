@@ -9,6 +9,7 @@ Spec: ./spec.md
 |---|---|
 | `tests/test_synth_text.py` (mới) | AC-1, AC-2, AC-5, AC-6 trên fixture nhỏ (corpus 50 dòng, 1 font) |
 | `tests/test_synth_receipt.py` (mới) | AC-3, AC-6: 20 hóa đơn từ fixture, kiểm polygon |
+| `tests/test_synth_receipt_overflow.py` (mới, sau verifier) | repro bug dòng cuối tràn khỏi giấy: mọi quad nằm trên giấy và có mực |
 | `tests/fonts/` (mới) | **vendor 1 font OFL** (BeVietnamPro-Regular + OFL.txt, ~130 KB) để test không phụ thuộc font hệ thống. Đồng thời giải quyết điểm minor #1 của intent 001 |
 | `src/docguard/data/synth_text.py` (mới) | `ReceiptCorpus`, `LineRenderer`, lọc charset, sinh số tiền/ngày/SĐT |
 | `src/docguard/data/synth_receipt.py` (mới) | layout hóa đơn + render + hiệu ứng + polygon |
@@ -45,6 +46,10 @@ Spec: ./spec.md
 - **Font:** Courier Prime và Share Tech Mono thiếu 92–102 glyph tiếng Việt nên bị loại. Thay bằng IBM Plex Mono (Regular/Bold), Noto Sans Mono, Source Code Pro (OFL), đều phủ đủ 221 ký tự trong vocab.
 - **Tốc độ:** nhiễu nền ban đầu sinh bằng vòng lặp Python (0,38 s/hóa đơn, 4,9 ms/dòng). Đã chuyển sang `np.random.default_rng(seed từ rng)`, vẫn tất định, còn 0,18 s/hóa đơn và 1,6 ms/dòng.
 - **AC-2 sửa định nghĩa (owner duyệt):** đổi từ "corpus không trùng val/test" sang "corpus chỉ lấy từ train". Lý do: 63,7% text val/test của MC-OCR trùng nguyên văn với train, vì cùng chuỗi cửa hàng nằm ở cả hai split. `check_leak` được thay bằng `check_provenance`, có thêm 3 test. Tỉ lệ trùng được ghi vào report dưới dạng thông tin.
+- **Sau verifier (2026-11-12):**
+  - *Major 1, bug:* dòng trống ngẫu nhiên không được tính vào chiều cao giấy, nên khoảng 1% hóa đơn có dòng cuối tràn khỏi giấy mà vẫn xuất polygon. Xử lý theo quy trình bug: test FAIL `106e29e`, fix `0154dc8` (dàn layout trước rồi mới tính chiều cao giấy). Đã sinh lại toàn bộ hóa đơn.
+  - *Major 2, AC-2 vế 2 (owner chọn a):* thêm `heldout_only`, `ReceiptCorpus(blocklist=...)` sinh lại dòng hoặc hóa đơn trùng, `corpus/heldout_blocklist.txt` (448 text), và check `no_heldout_generated` trong report. Trước khi sửa, verifier tìm thấy 4 số tiền trùng trong dữ liệu val.
+  - *Minor:* sửa câu chữ AC-5 (ép ngang dòng dài như PaddleOCR) và tên file trong data contract (`{split}/index.jsonl`); comment test cho đúng điều được kiểm; bỏ `_init_rng` không dùng. Tham số `seed` của `ReceiptCorpus`/`LineRenderer` giữ lại theo interface trong spec (mọi ngẫu nhiên đến từ `rng`). Chưa làm: test cho `make_synth_ocr.py` và nhánh exit 1 của report (để intent nhỏ sau, cùng với intent 001); bóng đổ dùng `np.roll` chỉ ảnh hưởng thẩm mỹ.
 - **Report:** nhãn được đếm bằng `Counter` thay cho `np.unique`, để in ra tên nhãn thay vì `np.str_`.
 
 ## Kết quả chạy thật (2026-11-11, splits.json sha256 `7d19106a…`, corpus sha256 `25fb1076…`)

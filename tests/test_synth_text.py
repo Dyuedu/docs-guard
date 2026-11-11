@@ -97,7 +97,7 @@ def test_line_image_shape_and_label(corpus):
 def test_line_renderer_long_text_is_shrunk_not_cropped():
     r = LineRenderer([TEST_FONT], height=32, max_width=320)
     img = r.render("Tổng tiền phải thanh toán: 1.250.000 VND", random.Random(0))
-    assert img.shape[1] == 320  # fills the full width after proportional shrink
+    assert img.shape[1] == 320  # too wide at height 32 -> squeezed to max_width (spec AC-5)
 
 
 def test_line_renderer_has_ink():
@@ -148,3 +148,49 @@ def test_provenance_check_flags_any_non_train_line():
     # a corpus line found neither in train nor in held-out is still not train-sourced
     leaked, _ = check_provenance(["CỬA HÀNG LẠ"], ["MINIMART ANAN"], ["PHỞ MŨ"])
     assert leaked == ["CỬA HÀNG LẠ"]
+
+
+# --- AC-2 clause 2 (owner chose option a): generated text never reproduces held-out-only text ------
+
+from docguard.data.synth_text import heldout_only  # noqa: E402
+from scripts.synth_ocr_report import check_heldout_generated  # noqa: E402
+
+
+def test_heldout_only_excludes_train_and_short_texts():
+    train = ["10,000", "MINIMART ANAN"]
+    held = ["10,000", "PHỞ  MŨ", "33,000", "abc"]          # "abc" has <= 3 chars -> out of scope (spec AC-2)
+    assert heldout_only(train, held) == {"phở mũ", "33,000"}
+
+
+def test_check_heldout_generated_flags_only_heldout_only_texts():
+    train = ["10,000"]
+    held = ["10,000", "33,000", "abc"]
+    generated = ["10,000", "33,000", "abc", "x", "33,000"]
+    assert check_heldout_generated(generated, train, held) == ["33,000"]
+
+
+def test_corpus_with_blocklist_never_generates_blocked_text(vocab):
+    # blocklist like the real collisions (amounts, item names), dense enough that an unfiltered
+    # generator would hit it often
+    probe = ReceiptCorpus(TRAIN_TEXTS, vocab, seed=0)
+    rng = random.Random(100)
+    blocked = {ReceiptCorpus.normalize(probe.amount(rng, big=rng.random() < 0.4)) for _ in range(300)}
+    blocked |= {ReceiptCorpus.normalize(probe.item_name(rng)) for _ in range(50)}
+    blocked = {b for b in blocked if len(b) > 3}
+    unfiltered = ReceiptCorpus(TRAIN_TEXTS, vocab, seed=0)
+    r0 = random.Random(3)
+    hits = sum(ReceiptCorpus.normalize(t) in blocked for _ in range(50) for t, _ in unfiltered.receipt(r0))
+    assert hits > 0  # the test is meaningful: without the blocklist, collisions do occur
+
+    c = ReceiptCorpus(TRAIN_TEXTS, vocab, seed=0, blocklist=blocked)
+    rng = random.Random(3)
+    allowed = vocab | {" "}
+    for _ in range(1000):
+        line = c.line(rng)
+        assert line and set(line) <= allowed
+        assert ReceiptCorpus.normalize(line) not in blocked, line
+    for _ in range(50):
+        rows = c.receipt(rng)
+        assert len(rows) >= 8
+        for text, _ in rows:
+            assert ReceiptCorpus.normalize(text) not in blocked, text

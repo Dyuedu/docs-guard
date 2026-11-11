@@ -1,12 +1,14 @@
 """Generate the synthetic tampering dataset from normalized MC-OCR annotations.
 
-Splits by source image so the same receipt never appears in two splits.
-Every authentic image is also written (re-compressed with the same JPEG
-distribution) so the classifier cannot shortcut on "was re-encoded".
+Splits come from the canonical split file (scripts/make_splits.py), so the same
+receipt is in the same split here as in the OCR/KIE data. Every authentic image is
+also written (re-compressed with the same JPEG distribution) so the classifier
+cannot shortcut on "was re-encoded".
 
 Usage:
     python scripts/make_tamper_dataset.py --ann data/processed/annotations.jsonl \
-        --images data/raw/mcocr/train_images --out data/tamper --font fonts/Roboto-Regular.ttf
+        --splits data/processed/splits.json --images data/raw/mcocr/train_images \
+        --out data/tamper --font data/fonts/Roboto-Regular.ttf
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ import cv2
 import numpy as np
 
 from docguard.data.annotations import read_jsonl
+from docguard.data.splits import load_splits
 from docguard.data.synth_tamper import copy_move, inpaint_and_render, jpeg_recompress, splice
 
 OPS = ("copy_move", "splice", "inpaint")
@@ -43,18 +46,18 @@ def main() -> None:
     ap.add_argument("--images", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--font", required=True, help="TTF font with Vietnamese glyphs")
-    ap.add_argument("--split", default="0.8,0.1,0.1")
+    ap.add_argument("--splits", required=True, help="canonical split file from scripts/make_splits.py")
     ap.add_argument("--tampered-per-image", type=int, default=2)
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
     samples = read_jsonl(args.ann)
-    rng.shuffle(samples)
-    fr = [float(x) for x in args.split.split(",")]
-    n = len(samples)
-    cut1, cut2 = int(fr[0] * n), int((fr[0] + fr[1]) * n)
-    splits = {"train": samples[:cut1], "val": samples[cut1:cut2], "test": samples[cut2:]}
+    canon = load_splits(args.splits)
+    splits = {name: [s for s in samples if s.image in ids] for name, ids in canon.items()}
+    missing = sum(len(v) for v in canon.values()) - sum(len(v) for v in splits.values())
+    if missing:
+        print(f"warning: {missing} split ids have no annotation and are skipped")
     img_dir = Path(args.images)
 
     for split, items in splits.items():

@@ -1,0 +1,15 @@
+# Experiment matrix (see docs/proposal.md §6). Each entry is logged as one MLflow run.
+
+gpu: T4
+calibration_images: 500
+latency:
+  warmup: 50
+  iterations: 500
+
+variants:
+  B0: {runtime: pytorch, precision: fp32}
+  B1: {runtime: onnxruntime, precision: fp32}
+  B2: {runtime: tensorrt, precision: fp16}
+  B3: {runtime: tensorrt, precision: int8}
+  B4: {runtime: tensorrt, precision: int8, prune_ratio: 0.3}
+  B5: {runtime: tensorrt, precision: {tamper_seg: fp16, text_det: int8, text_rec: int8}}

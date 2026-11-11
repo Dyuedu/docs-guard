@@ -1,0 +1,27 @@
+# Shared runtime config for the Triton BLS pipeline and offline evaluation.
+
+tampering:
+  patch_size: 512
+  stride: 384            # overlap 128 px to avoid seam artifacts
+  mask_threshold: 0.5
+  min_region_area: 64    # px; drop tiny noisy blobs
+  max_long_side: 2048    # images larger than this are downscaled (hurts forensics; logged)
+
+decision:
+  # Image is flagged when either rule fires.
+  tampered_area_ratio: 0.002
+  tampered_score: 0.80
+
+text_det:
+  input_size: 960
+  bin_threshold: 0.3
+  box_threshold: 0.6
+  unclip_ratio: 1.5
+
+text_rec:
+  height: 32
+  width: 320
+  vocab_file: configs/vocab_vi.txt
+
+kie:
+  fields: [seller, timestamp, total_amount]

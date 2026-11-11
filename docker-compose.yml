@@ -1,0 +1,26 @@
+services:
+  triton:
+    build: { context: ., dockerfile: serving/triton.Dockerfile }
+    command: tritonserver --model-repository=/models --log-verbose=0 --metrics-port=8002
+    ports: ["8000:8000", "8001:8001", "8002:8002"]   # HTTP, gRPC, Prometheus metrics
+    volumes:
+      - ./serving/model_repository:/models
+      - ./artifacts:/workspace/artifacts
+    shm_size: 1g
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
+
+  gateway:
+    build: { context: ., dockerfile: serving/gateway/Dockerfile }
+    environment:
+      TRITON_GRPC_URL: triton:8001
+    ports: ["8080:8080"]
+    depends_on: [triton]
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlruns/mlflow.db --default-artifact-root /mlruns
+    ports: ["5000:5000"]
+    volumes: ["./mlruns:/mlruns"]

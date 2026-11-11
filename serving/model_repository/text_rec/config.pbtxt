@@ -1,0 +1,20 @@
+# CRNN + CTC text recognition on 32x320 crops.
+# Output: per-timestep logits [T, C], C = len(configs/vocab_vi.txt) + 1 (blank at index 0).
+name: "text_rec"
+platform: "tensorrt_plan"
+max_batch_size: 64
+
+input [
+  { name: "image", data_type: TYPE_FP32, dims: [ 3, 32, 320 ] }
+]
+output [
+  { name: "logits", data_type: TYPE_FP32, dims: [ -1, -1 ] }
+]
+
+# Crops from many concurrent requests are merged here — this is where batching pays off most.
+dynamic_batching {
+  preferred_batch_size: [ 32, 64 ]
+  max_queue_delay_microseconds: 3000
+}
+
+instance_group [ { count: 1, kind: KIND_GPU } ]

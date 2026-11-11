@@ -1,0 +1,19 @@
+# Tampering localization on 512x512 patches at native resolution.
+# Swap platform to "onnxruntime_onnx" + model.onnx for variant B1.
+name: "tamper_seg"
+platform: "tensorrt_plan"
+max_batch_size: 16
+
+input [
+  { name: "image", data_type: TYPE_FP32, dims: [ 3, 512, 512 ] }
+]
+output [
+  { name: "mask_logits", data_type: TYPE_FP32, dims: [ 1, 512, 512 ] }
+]
+
+dynamic_batching {
+  preferred_batch_size: [ 8, 16 ]
+  max_queue_delay_microseconds: 2000
+}
+
+instance_group [ { count: 1, kind: KIND_GPU } ]

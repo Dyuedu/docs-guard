@@ -1,0 +1,19 @@
+# Orchestrator (Python backend, BLS). Handles variable fan-out (number of text crops
+# differs per image), which a static Triton ensemble cannot express.
+name: "pipeline"
+backend: "python"
+max_batch_size: 0
+
+input [
+  { name: "image_bytes", data_type: TYPE_UINT8, dims: [ -1 ] },
+  { name: "request_id", data_type: TYPE_STRING, dims: [ 1 ], optional: true }
+]
+output [
+  { name: "result_json", data_type: TYPE_STRING, dims: [ 1 ] }
+]
+
+parameters: { key: "config_path", value: { string_value: "/workspace/configs/pipeline.yaml" } }
+parameters: { key: "vocab_dir", value: { string_value: "/workspace" } }
+
+# CPU instances: decode/tiling/post-processing are CPU work; GPU models are called via BLS.
+instance_group [ { count: 4, kind: KIND_CPU } ]

@@ -1,6 +1,6 @@
 # Spec 001 — Sinh và kiểm định tập giả mạo
 
-Status: Accepted
+Status: Implemented
 Date: 2026-11-11
 Intent: ./intent.md
 

@@ -56,4 +56,8 @@ Spec: ./spec.md
   - 4 check đều PASS. Mỗi phép biến đổi chiếm 29–37%. Trung vị diện tích mask: 0,00215/0,00220/0,00222.
   - Diện tích mask inpaint lớn nhất giảm từ 0,126 xuống 0,027.
 - Outlier còn lại: 1 ảnh (`train/mcocr_public_145014wvxfq_copy_move_3`, 0,128). Nguyên nhân là **lỗi nhãn MC-OCR**: box ADDRESS rộng 587×577px, phủ nửa hóa đơn. Mẫu này được giữ lại và report đã gắn cờ. Lọc box có nhãn bất thường là việc của một intent sau, nếu cần.
-- AC-7 (owner xem 50 ảnh trong `results/data/tamper/preview/`): **chờ owner**.
+- AC-7 (owner xem 50 ảnh trong `results/data/tamper/preview/`): **PASS**. Ngày 2026-11-11 owner xác nhận số ảnh hỏng ≤ 5/50. Owner không ghi số ảnh hỏng cụ thể.
+- Verifier: 82 test pass, không có blocker/major. Các điểm minor để lại cho intent sau:
+  - test cần font phụ thuộc font hệ thống, nên vendor một font OFL vào `tests/`;
+  - chưa có test cho trường hợp report trả exit 1;
+  - `_fit_font` dừng ở cỡ 6, chữ có thể bị cắt.

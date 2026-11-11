@@ -43,7 +43,7 @@ Spec: ./spec.md
 
 ## Deviations (điền khi làm xong)
 - **Dependency:** không thêm extra `[synth]`. synthtiger bị loại vì imgaug vỡ với numpy 2, nên `pyproject.toml` không đổi.
-- **Font:** Courier Prime và Share Tech Mono thiếu 92–102 glyph tiếng Việt nên bị loại. Thay bằng IBM Plex Mono (Regular/Bold), Noto Sans Mono, Source Code Pro (OFL), đều phủ đủ 221 ký tự trong vocab.
+- **Font:** Courier Prime và Share Tech Mono thiếu 92–102 glyph tiếng Việt nên bị loại. Thay bằng IBM Plex Mono (Regular/Bold), Noto Sans Mono, Source Code Pro (OFL). Bộ font dùng khi sinh = mọi `*.ttf` trong `data/fonts/` (7 file: thêm Be Vietnam Pro Regular/Bold và Roboto Mono). Kiểm tra 2026-11-12 bằng so glyph với `.notdef`: cả 7 font phủ đủ 221/221 ký tự trong vocab.
 - **Tốc độ:** nhiễu nền ban đầu sinh bằng vòng lặp Python (0,38 s/hóa đơn, 4,9 ms/dòng). Đã chuyển sang `np.random.default_rng(seed từ rng)`, vẫn tất định, còn 0,18 s/hóa đơn và 1,6 ms/dòng.
 - **AC-2 sửa định nghĩa (owner duyệt):** đổi từ "corpus không trùng val/test" sang "corpus chỉ lấy từ train". Lý do: 63,7% text val/test của MC-OCR trùng nguyên văn với train, vì cùng chuỗi cửa hàng nằm ở cả hai split. `check_leak` được thay bằng `check_provenance`, có thêm 3 test. Tỉ lệ trùng được ghi vào report dưới dạng thông tin.
 - **Sau verifier (2026-11-12):**

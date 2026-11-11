@@ -102,15 +102,22 @@ def _render_paper(lines, fonts, rng, cfg, text_px: int):
     margin = int(max_w * _rand(rng, cfg["paper_margin"])) + 4
     paper_w = max_w + 2 * margin
     line_h = int(text_px * spacing)
-    paper_h = int(sum(max(m[4], line_h) + (line_h - text_px) for m in metrics) + 2 * margin + text_px)
+    pad = max(1, text_px // 8)
+    # lay out first (incl. random blank separators), then size the paper to fit every line + its pad
+    ys, y = [], margin + int(text_px * 0.3)
+    for m in metrics:
+        ys.append(y)
+        y += max(m[4], line_h) + (line_h - text_px)
+        if rng.random() < 0.06:  # blank line / separator
+            y += line_h // 2
+    paper_h = max(yy + m[4] for yy, m in zip(ys, metrics)) + pad + margin
 
     paper = Image.fromarray(_paper_texture(paper_w, paper_h, rng))
     draw = ImageDraw.Draw(paper)
     ink = rng.randint(0, 70)
     ink_rgb = (ink, ink + rng.randint(0, 15), ink + rng.randint(0, 25))
     quads = []
-    y = margin + int(text_px * 0.3)
-    for i, ((text, label), (f, left, top, tw, th)) in enumerate(zip(lines, metrics)):
+    for i, ((text, label), (f, left, top, tw, th), y) in enumerate(zip(lines, metrics, ys)):
         if _is_header(i, text, label):
             x = (paper_w - tw) // 2                              # centred header
         elif rng.random() < 0.08:
@@ -118,11 +125,7 @@ def _render_paper(lines, fonts, rng, cfg, text_px: int):
         else:
             x = margin
         draw.text((x - left, y - top), text, font=f, fill=ink_rgb)
-        pad = max(1, text_px // 8)
         quads.append([[x - pad, y - pad], [x + tw + pad, y - pad], [x + tw + pad, y + th + pad], [x - pad, y + th + pad]])
-        y += max(th, line_h) + (line_h - text_px)
-        if rng.random() < 0.06:  # blank line / separator
-            y += line_h // 2
     arr = np.asarray(paper).astype(np.float32)
     if rng.random() < 0.5:  # thermal print is often slightly faded / uneven
         fade = (_field(rng, 6, 4, paper_w, paper_h) + 1) * 0.175  # [0, 0.35]

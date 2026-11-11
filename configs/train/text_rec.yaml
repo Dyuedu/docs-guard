@@ -1,0 +1,28 @@
+# CRNN + CTC. See plan §2.2. Output classes = len(vocab) + 1 (blank = 0).
+model: crnn
+seed: 42
+data:
+  vocab_file: configs/vocab_vi.txt
+  height: 32             # must match configs/pipeline.yaml text_rec
+  width: 320
+  synth:                 # on-the-fly synthetic text lines
+    enabled: true
+    fonts_dir: data/fonts
+    corpus: data/synth_ocr/corpus.txt
+    samples_per_epoch: 200000
+  real_train: data/processed/rec_crops_train.jsonl   # MC-OCR field crops (fine-tune stage)
+  real_val: data/processed/rec_crops_val.jsonl
+  synth_ratio_finetune: 0.3
+train:
+  epochs: 50
+  batch_size: 256
+  lr: 0.0005
+  weight_decay: 0.0001
+  amp: true
+  num_workers: 8
+  init: null
+model_args:
+  backbone: vgg_lite     # vgg_lite | mobilenetv3_small
+  hidden: 256
+out_dir: artifacts/train/text_rec
+mlflow_experiment: text_rec

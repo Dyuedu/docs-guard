@@ -1,0 +1,23 @@
+# DBNet (MobileNetV3-large + FPN + DB head). See plan §2.1.
+model: dbnet
+seed: 42
+data:
+  train: [data/synth_ocr/receipts/train.jsonl]   # v2 adds data/processed/pseudo_det_train.jsonl
+  val: data/synth_ocr/receipts/val.jsonl
+  image_root: .
+  input_size: 960        # must match configs/pipeline.yaml text_det.input_size
+  shrink_ratio: 0.4
+  thresh_min: 0.3
+  thresh_max: 0.7
+train:
+  epochs: 300
+  batch_size: 8
+  lr: 0.001
+  weight_decay: 0.0001
+  amp: true
+  num_workers: 8
+  ohem_ratio: 3.0
+  loss_weights: {prob: 1.0, binary: 1.0, thresh: 10.0}
+  init: null             # path to v1 checkpoint when fine-tuning v2
+out_dir: artifacts/train/text_det
+mlflow_experiment: text_det

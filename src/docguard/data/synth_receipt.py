@@ -40,15 +40,46 @@ DEFAULT_CFG = {
 _MONO_HINTS = ("mono", "plex", "code", "courier")
 
 
+def _signed_area(p: np.ndarray) -> float:
+    x, y = p[:, 0], p[:, 1]
+    return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
+
+
+def _clip_convex(subject: list, clip: np.ndarray) -> list:
+    """Sutherland–Hodgman: clip polygon `subject` by convex CCW polygon `clip` (textbook algorithm)."""
+    out = subject
+    for i in range(len(clip)):
+        a, b = clip[i], clip[(i + 1) % len(clip)]
+        inp, out = out, []
+        if not inp:
+            break
+        side = lambda p: (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])  # >= 0: inside
+        for j in range(len(inp)):
+            p, q = inp[j], inp[(j + 1) % len(inp)]
+            sp, sq = side(p), side(q)
+            if sp >= 0:
+                out.append(p)
+            if (sp >= 0) != (sq >= 0):
+                t = sp / (sp - sq)
+                out.append((p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])))
+    return out
+
+
 def polygon_iou(a, b) -> float:
-    """IoU of two convex quads (float coords)."""
-    pa = np.asarray(a, np.float32).reshape(-1, 1, 2)
-    pb = np.asarray(b, np.float32).reshape(-1, 1, 2)
-    area_a, area_b = cv2.contourArea(pa), cv2.contourArea(pb)
-    if area_a <= 0 or area_b <= 0:
+    """IoU of two convex quads (float coords).
+
+    Not cv2.intersectConvexConvex: it returns the full area of one quad for nearly parallel,
+    touching edges (seen on adjacent tilted text lines), so clip with Sutherland–Hodgman instead.
+    """
+    pa, pb = np.asarray(a, np.float64), np.asarray(b, np.float64)
+    sa, sb = _signed_area(pa), _signed_area(pb)
+    if abs(sa) <= 0 or abs(sb) <= 0:
         return 0.0
-    inter, _ = cv2.intersectConvexConvex(pa, pb)
-    union = area_a + area_b - inter
+    if sb < 0:
+        pb = pb[::-1]  # clip polygon must be counter-clockwise for the inside test
+    inter_poly = _clip_convex([tuple(p) for p in pa], pb)
+    inter = abs(_signed_area(np.asarray(inter_poly))) if len(inter_poly) >= 3 else 0.0
+    union = abs(sa) + abs(sb) - inter
     return float(inter / union) if union > 0 else 0.0
 
 

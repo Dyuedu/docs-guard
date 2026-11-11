@@ -22,3 +22,4 @@ serving/model_repository/*/1/*.plan
 
 # local assistant instructions (not tracked)
 CLAUDE.md
+.claude/test-lock

@@ -89,3 +89,19 @@ def test_receipt_deterministic(corpus):
     (a, ba), _ = _one(corpus, 11)
     (b, bb), _ = _one(corpus, 11)
     assert np.array_equal(a, b) and ba == bb
+
+
+def test_polygon_iou_nearly_parallel_quads_regression():
+    # Bug repro (report run 2026-11-12, train images/008245.jpg lines 6,7): two adjacent, slightly
+    # tilted line quads that only touch along a thin sliver. cv2.intersectConvexConvex returned the
+    # full area of `a` (IoU 0.95). Ground truth is computed independently by rasterising both quads.
+    a = [[733.1, 108.0], [717.4, 663.1], [676.6, 663.1], [692.9, 109.1]]
+    b = [[692.8, 112.5], [675.2, 713.7], [635.6, 713.6], [653.7, 113.6]]
+    s = 8
+    ma = np.zeros((800 * s, 800 * s), np.uint8); mb = np.zeros_like(ma)
+    cv2.fillPoly(ma, [np.round(np.asarray(a) * s).astype(np.int32)], 1)
+    cv2.fillPoly(mb, [np.round(np.asarray(b) * s).astype(np.int32)], 1)
+    truth = (ma & mb).sum() / (ma | mb).sum()
+    assert truth < 0.01
+    assert polygon_iou(a, b) == pytest.approx(truth, abs=0.005)
+    assert polygon_iou(b, a) == pytest.approx(truth, abs=0.005)

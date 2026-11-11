@@ -41,3 +41,18 @@ Spec: ./spec.md
 - 20k ảnh JPEG ~5 GB: kiểm tra đĩa trước khi chạy.
 
 ## Deviations (điền khi làm xong)
+- **Dependency:** không thêm extra `[synth]`. synthtiger bị loại vì imgaug vỡ với numpy 2, nên `pyproject.toml` không đổi.
+- **Font:** Courier Prime và Share Tech Mono thiếu 92–102 glyph tiếng Việt nên bị loại. Thay bằng IBM Plex Mono (Regular/Bold), Noto Sans Mono, Source Code Pro (OFL), đều phủ đủ 221 ký tự trong vocab.
+- **Tốc độ:** nhiễu nền ban đầu sinh bằng vòng lặp Python (0,38 s/hóa đơn, 4,9 ms/dòng). Đã chuyển sang `np.random.default_rng(seed từ rng)`, vẫn tất định, còn 0,18 s/hóa đơn và 1,6 ms/dòng.
+- **AC-2 sửa định nghĩa (owner duyệt):** đổi từ "corpus không trùng val/test" sang "corpus chỉ lấy từ train". Lý do: 63,7% text val/test của MC-OCR trùng nguyên văn với train, vì cùng chuỗi cửa hàng nằm ở cả hai split. `check_leak` được thay bằng `check_provenance`, có thêm 3 test. Tỉ lệ trùng được ghi vào report dưới dạng thông tin.
+- **Report:** nhãn được đếm bằng `Counter` thay cho `np.unique`, để in ra tên nhãn thay vì `np.str_`.
+
+## Kết quả chạy thật (2026-11-11, splits.json sha256 `7d19106a…`, corpus sha256 `25fb1076…`)
+- **Corpus:** 5.286 dòng, 2.606 từ, lấy từ 924 hóa đơn train.
+- **Hóa đơn:** 20.000 train + 1.000 val, mất 24,6 phút với 8 worker (AC-7 ≤ 60 phút: PASS). Tổng 1,6 GB cho cả `data/synth_ocr`.
+  - Số dòng/ảnh (min/trung vị/max): 9/20/30.
+  - Chiều cao chữ quy về cạnh dài 1024px (p5/p50/p95): 11,9/20,6/32,9 px (AC-4 cần p50 ∈ [12, 40]: PASS).
+  - Nhãn của train: OTHER 296k, ADDRESS 30k, TOTAL_COST 30k, SELLER 20k, TIMESTAMP 20k.
+- **Dòng chữ val:** 5.000 dòng, 10 giây. Chiều rộng p50 là 281px, độ dài nhãn p50 là 16 ký tự, 100% nhãn khác rỗng. LineRenderer chạy 1,54 ms/dòng (AC-7 ≤ 5 ms: PASS).
+- **Report:** 6/6 check PASS (`charset`, `no_leak`, `polygons_valid`, `text_height`, `lines_valid`, `line_render_speed`), exit 0.
+- **AC-4 (owner xem 30 preview trong `results/data/synth_ocr/preview/`):** chờ owner.

@@ -54,6 +54,13 @@ python scripts/make_tamper_dataset.py --ann data/processed/annotations.jsonl \
 # Kiểm định: rò rỉ split, mask hợp lệ, tỉ lệ phép biến đổi, diện tích mask, ảnh preview (exit 1 nếu FAIL)
 python scripts/tamper_report.py --root data/tamper --splits data/processed/splits.json \
   --out results/data/tamper --preview 50
+
+# Dữ liệu chữ tổng hợp cho OCR (intent 002): corpus chỉ từ split train, hóa đơn toàn trang có polygon
+# cho mọi dòng (DBNet), và tập val dòng chữ 32px (CRNN; train sinh on-the-fly). Font: OFL trong data/fonts.
+python scripts/make_synth_ocr.py corpus --ann data/processed/annotations.jsonl --splits data/processed/splits.json
+python scripts/make_synth_ocr.py receipts --n-train 20000 --n-val 1000 --workers 8
+python scripts/make_synth_ocr.py lines --n 5000
+python scripts/synth_ocr_report.py --preview 30      # charset, rò rỉ, polygon, chiều cao chữ; exit 1 nếu FAIL
 ```
 
 Converter đã được kiểm tra với bản public MC-OCR (cột `img_id`, `anno_polygons`, `anno_texts`, `anno_labels`). MC-OCR chỉ được dùng cho nghiên cứu, cần đăng ký với VNDAG (xem `data/raw/mcocr/README_VNDAG.md`).

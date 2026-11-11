@@ -14,6 +14,7 @@ import json
 import random
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 import cv2
@@ -23,7 +24,7 @@ from PIL import Image
 from docguard.data.annotations import read_jsonl
 from docguard.data.splits import load_splits
 from docguard.data.synth_receipt import polygon_iou
-from docguard.data.synth_text import LineRenderer, ReceiptCorpus, load_vocab_set
+from docguard.data.synth_text import LineRenderer, ReceiptCorpus, filter_charset, load_vocab_set
 
 # Thresholds from intent/002-synth-ocr-data/spec.md
 MIN_LINES, MAX_IOU = 8, 0.1
@@ -46,10 +47,25 @@ def check_charset(texts, vocab) -> list[str]:
     return sorted({c for t in texts for c in t if c not in allowed})
 
 
-def check_leak(corpus_lines: list[str], ann_path: Path, splits: dict) -> list[str]:
-    held = {ReceiptCorpus.normalize(b.text) for s in read_jsonl(ann_path) if s.image in splits["val"] | splits["test"]
-            for b in s.boxes if len(b.text.strip()) > 3}
-    return sorted({l for l in corpus_lines if ReceiptCorpus.normalize(l) in held})
+def check_provenance(corpus_lines: list[str], train_texts: list[str], heldout_texts: list[str]) -> tuple[list[str], dict]:
+    """AC-2 (amended): every corpus line must come from train texts. Lines that also occur in
+    val/test are legitimate. Returns (lines not sourced from train, info with held-out overlap)."""
+    norm = ReceiptCorpus.normalize
+    train = {norm(t) for t in train_texts}
+    leaked = sorted({l for l in corpus_lines if norm(l) not in train})
+    held = [norm(t) for t in heldout_texts if len(t.strip()) > 3]
+    overlap = sum(h in train for h in held)
+    return leaked, {"heldout_texts": len(held), "heldout_in_train": overlap,
+                    "heldout_overlap_ratio": overlap / len(held) if held else 0.0}
+
+
+def _split_texts(ann_path: Path, splits: dict, vocab: set[str]) -> tuple[list[str], list[str]]:
+    train, held = [], []
+    for s in read_jsonl(ann_path):
+        dst = train if s.image in splits["train"] else held if s.image in splits["val"] | splits["test"] else None
+        if dst is not None:
+            dst += [" ".join(filter_charset(b.text, vocab).split()) for b in s.boxes]
+    return train, held
 
 
 def check_receipts(split_dir: Path, rows: list[dict]) -> dict:
@@ -81,7 +97,7 @@ def check_receipts(split_dir: Path, rows: list[dict]) -> dict:
     hs = np.asarray(heights) if heights else np.zeros(1)
     return {"n_images": len(rows), "n_lines_total": int(sum(n_lines)), "lines_per_image": {"min": int(min(n_lines, default=0)), "median": float(np.median(n_lines)) if n_lines else 0, "max": int(max(n_lines, default=0))},
             "text_height_px_at_1024": {"p5": float(np.percentile(hs, 5)), "p50": float(np.median(hs)), "p95": float(np.percentile(hs, 95))},
-            "labels": {k: int(v) for k, v in zip(*np.unique([b["label"] for r in rows for b in r["boxes"]], return_counts=True))} if rows else {},
+            "labels": dict(sorted(Counter(b["label"] for r in rows for b in r["boxes"]).items())),
             "errors": errors[:50], "n_errors": len(errors), "texts": texts}
 
 
@@ -149,8 +165,12 @@ def to_md(rep: dict) -> str:
     s = rep["lines"]
     L += ["", "## Lines (val)", "", f"- n={s['n']}, width p5/p50/p95 = {s['width']['p5']:.0f}/{s['width']['p50']:.0f}/{s['width']['p95']:.0f}, label len p50 = {s['label_len_p50']:.0f}, non-blank {s['non_blank_ratio']:.1%}, errors {s['n_errors']}",
           f"- LineRenderer: {rep['line_render_ms']:.2f} ms/line (budget {LINE_MS_BUDGET} ms)"]
-    L += ["", "## Charset / leak", "", f"- chars outside vocab: {rep['bad_chars']!r}", f"- corpus lines leaked from val/test: {len(rep['leaked'])}"]
+    p = rep["provenance"]
+    L += ["", "## Charset / provenance", "", f"- chars outside vocab: {rep['bad_chars']!r}",
+          f"- corpus lines NOT sourced from train: {len(rep['leaked'])}"]
     L += [f"  - {x}" for x in rep["leaked"][:10]]
+    L += [f"- info: {p['heldout_in_train']}/{p['heldout_texts']} val/test box texts ({p['heldout_overlap_ratio']:.1%}) also occur verbatim in train "
+          "(same store chains across splits). Read val/test CER / Field EM with this in mind."]
     if rep.get("preview"):
         L += ["", "## Preview (AC-4, owner review)", ""] + [f"- `{p}`" for p in rep["preview"]]
     return "\n".join(L) + "\n"
@@ -186,13 +206,14 @@ def main() -> int:
     all_texts += lines.pop("texts")
 
     bad_chars = check_charset(all_texts, vocab)
-    leaked = check_leak(corpus_lines, Path(args.ann), splits)
+    train_texts, heldout_texts = _split_texts(Path(args.ann), splits, vocab)
+    leaked, provenance = check_provenance(corpus_lines, train_texts, heldout_texts)
     ms = bench_line_renderer(corpus_lines, vocab, fonts)
     heights_ok = all(HEIGHT_RANGE[0] <= s["text_height_px_at_1024"]["p50"] <= HEIGHT_RANGE[1] for s in receipts.values())
 
     rep = {
         "splits_sha256": _sha(Path(args.splits)), "corpus_sha256": _sha(root / "corpus" / "receipt_lines.txt"),
-        "receipts": receipts, "lines": lines, "bad_chars": "".join(bad_chars), "leaked": leaked, "line_render_ms": ms,
+        "receipts": receipts, "lines": lines, "bad_chars": "".join(bad_chars), "leaked": leaked, "provenance": provenance, "line_render_ms": ms,
         "checks": {
             "charset": not bad_chars,
             "no_leak": not leaked,

@@ -121,3 +121,30 @@ def test_line_render_deterministic():
     a = r1.render("Ngày: 12/08/2020", random.Random(9))
     b = r2.render("Ngày: 12/08/2020", random.Random(9))
     assert np.array_equal(a, b)
+
+
+# --- AC-2 (amended): provenance-based leak check ---------------------------------------------------
+
+from scripts.synth_ocr_report import check_provenance  # noqa: E402
+
+
+def test_provenance_check_accepts_train_only_and_shared_lines():
+    train = ["MINIMART ANAN", "Tổng tiền:", "10,000"]
+    held = ["10,000", "PHỞ MŨ"]                       # "10,000" also in train -> legitimate
+    corpus = ["MINIMART ANAN", "tổng   TIỀN:", "10,000"]  # normalisation: case + spaces
+    leaked, info = check_provenance(corpus, train, held)
+    assert leaked == []
+    assert info["heldout_overlap_ratio"] == pytest.approx(0.5)   # 1 of 2 held-out texts also in train
+
+
+def test_provenance_check_flags_line_not_from_train():
+    train = ["MINIMART ANAN"]
+    held = ["PHỞ MŨ"]
+    leaked, _ = check_provenance(["MINIMART ANAN", "PHỞ MŨ"], train, held)
+    assert leaked == ["PHỞ MŨ"]
+
+
+def test_provenance_check_flags_any_non_train_line():
+    # a corpus line found neither in train nor in held-out is still not train-sourced
+    leaked, _ = check_provenance(["CỬA HÀNG LẠ"], ["MINIMART ANAN"], ["PHỞ MŨ"])
+    assert leaked == ["CỬA HÀNG LẠ"]

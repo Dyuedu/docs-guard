@@ -52,12 +52,13 @@ Spec: ./spec.md
   - *Minor:* sửa câu chữ AC-5 (ép ngang dòng dài như PaddleOCR) và tên file trong data contract (`{split}/index.jsonl`); comment test cho đúng điều được kiểm; bỏ `_init_rng` không dùng. Tham số `seed` của `ReceiptCorpus`/`LineRenderer` giữ lại theo interface trong spec (mọi ngẫu nhiên đến từ `rng`). Chưa làm: test cho `make_synth_ocr.py` và nhánh exit 1 của report (để intent nhỏ sau, cùng với intent 001); bóng đổ dùng `np.roll` chỉ ảnh hưởng thẩm mỹ.
 - **Report:** nhãn được đếm bằng `Counter` thay cho `np.unique`, để in ra tên nhãn thay vì `np.str_`.
 
-## Kết quả chạy thật (2026-11-11, splits.json sha256 `7d19106a…`, corpus sha256 `25fb1076…`)
-- **Corpus:** 5.286 dòng, 2.606 từ, lấy từ 924 hóa đơn train.
-- **Hóa đơn:** 20.000 train + 1.000 val, mất 24,6 phút với 8 worker (AC-7 ≤ 60 phút: PASS). Tổng 1,6 GB cho cả `data/synth_ocr`.
-  - Số dòng/ảnh (min/trung vị/max): 9/20/30.
-  - Chiều cao chữ quy về cạnh dài 1024px (p5/p50/p95): 11,9/20,6/32,9 px (AC-4 cần p50 ∈ [12, 40]: PASS).
+## Kết quả chạy thật (chạy lại 2026-11-12 sau khi sửa theo verifier; splits.json sha256 `7d19106a…`, corpus sha256 `25fb1076…`)
+- **Corpus:** 5.286 dòng, 2.606 từ, lấy từ 924 hóa đơn train. Blocklist: 448 text chỉ có ở val/test.
+- **Hóa đơn:** 20.000 train + 1.000 val, mất 22,0 phút với 8 worker (AC-7 ≤ 60 phút: PASS). Tổng 1,6 GB cho cả `data/synth_ocr`.
+  - Số dòng/ảnh (min/trung vị/max): train 9/20/30, val 11/20/29.
+  - Chiều cao chữ quy về cạnh dài 1024px (p5/p50/p95): train 12,1/20,9/33,3 px, val 12,0/20,9/32,9 px (AC-4 cần p50 ∈ [12, 40]: PASS).
   - Nhãn của train: OTHER 296k, ADDRESS 30k, TOTAL_COST 30k, SELLER 20k, TIMESTAMP 20k.
-- **Dòng chữ val:** 5.000 dòng, 10 giây. Chiều rộng p50 là 281px, độ dài nhãn p50 là 16 ký tự, 100% nhãn khác rỗng. LineRenderer chạy 1,54 ms/dòng (AC-7 ≤ 5 ms: PASS).
-- **Report:** 6/6 check PASS (`charset`, `no_leak`, `polygons_valid`, `text_height`, `lines_valid`, `line_render_speed`), exit 0.
-- **AC-4 (owner xem 30 preview trong `results/data/synth_ocr/preview/`):** PASS, owner duyệt 2026-11-11 (≤ 3/30 ảnh hỏng).
+- **Dòng chữ val:** 5.000 dòng, 10 giây. Chiều rộng p50 là 282px, độ dài nhãn p50 là 16 ký tự, 100% nhãn khác rỗng. LineRenderer chạy 1,53 ms/dòng (AC-7 ≤ 5 ms: PASS).
+- **Report:** 7/7 check PASS (`charset`, `no_leak`, `no_heldout_generated`, `polygons_valid`, `text_height`, `lines_valid`, `line_render_speed`), exit 0.
+  - Lần chạy đầu sau khi sinh lại: `polygons_valid` FAIL ở 1/20.000 ảnh (`008245.jpg`, dòng 6–7, IoU 0,95). Raster hóa cho IoU thật là 0,003: lỗi nằm ở `cv2.intersectConvexConvex` trong `polygon_iou` (cạnh gần song song, chạm nhau), không phải ở dữ liệu. Xử lý theo quy trình bug: test FAIL `d1450d9`, fix `c9015ca` (cắt Sutherland–Hodgman). `polygon_iou` chỉ dùng trong report và test nên không phải sinh lại dữ liệu.
+- **AC-4 (owner xem 30 preview trong `results/data/synth_ocr/preview/`):** PASS, owner duyệt 2026-11-11 (≤ 3/30 ảnh hỏng) trên bộ dữ liệu trước khi sinh lại. Sau khi sinh lại, Claude xem lại `receipts_00.jpg`: layout và polygon vẫn đúng.

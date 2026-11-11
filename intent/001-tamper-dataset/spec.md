@@ -15,6 +15,7 @@ Intent: ./intent.md
 | AC-5 | Tất định: chạy lại cùng seed, cùng input thì `index.jsonl` giống hệt. | `tests/test_tamper_stats.py::test_generation_deterministic` (fixture nhỏ) |
 | AC-6 | Report chạy được bằng một lệnh, exit ≠ 0 nếu bất kỳ `checks.*` nào FAIL. | `scripts/tamper_report.py` trên dữ liệu thật |
 | AC-7 | Owner xem bảng ảnh xem trước của 50 cặp (train/val, phân tầng theo phép biến đổi). Số cặp hỏng ≤ 5. "Hỏng" nghĩa là mask không trùng vùng bị sửa, hoặc vùng sửa nằm ngoài chữ. | ghi kết quả vào `plan.md` › Deviations |
+| AC-8 | *(bổ sung 2026-11-11, owner duyệt fix bug)* Inpaint chỉ sửa pixel **bên trong** bbox của box được chọn. Box số nằm dọc (h > w) không được chọn để inpaint; nếu hóa đơn chỉ có box dọc thì ném `ValueError`. | `tests/test_synth_tamper.py::test_inpaint_*` |
 
 ## Interface / data contract
 

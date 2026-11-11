@@ -55,4 +55,4 @@ Spec: ./spec.md
   - Nhãn của train: OTHER 296k, ADDRESS 30k, TOTAL_COST 30k, SELLER 20k, TIMESTAMP 20k.
 - **Dòng chữ val:** 5.000 dòng, 10 giây. Chiều rộng p50 là 281px, độ dài nhãn p50 là 16 ký tự, 100% nhãn khác rỗng. LineRenderer chạy 1,54 ms/dòng (AC-7 ≤ 5 ms: PASS).
 - **Report:** 6/6 check PASS (`charset`, `no_leak`, `polygons_valid`, `text_height`, `lines_valid`, `line_render_speed`), exit 0.
-- **AC-4 (owner xem 30 preview trong `results/data/synth_ocr/preview/`):** chờ owner.
+- **AC-4 (owner xem 30 preview trong `results/data/synth_ocr/preview/`):** PASS, owner duyệt 2026-11-11 (≤ 3/30 ảnh hỏng).

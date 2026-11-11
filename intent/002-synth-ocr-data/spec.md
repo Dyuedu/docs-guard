@@ -1,6 +1,6 @@
 # Spec 002 — Dữ liệu chữ tổng hợp cho OCR
 
-Status: Accepted
+Status: Implemented
 Date: 2026-11-11
 Intent: ./intent.md
 

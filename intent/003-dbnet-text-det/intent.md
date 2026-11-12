@@ -38,8 +38,12 @@ Còn thiếu model, vòng train, metric detection và checkpoint. DBNet là đư
 - Sửa:
   - `configs/train/text_det.yaml`: epochs, kích thước crop khi train, backbone pretrained (xem Open questions);
   - có thể sửa `src/docguard/export/onnx_export.py` nếu cần hook `export_mode`.
+- Sửa (bổ sung 2026-11-12, owner duyệt ở spec, Flagged concern 1 phương án A):
+  - `src/docguard/pipeline/processing.py`: `det_postprocess` unclip chính xác (nghịch đảo công thức shrink);
+  - `configs/pipeline.yaml` (`unclip_ratio` → `shrink_ratio`) và `serving/model_repository/pipeline/1/model.py`;
+  - `.github/workflows/ci.yml`: cài torch CPU cho test model.
 - Đọc, không sửa:
-  - `src/docguard/pipeline/processing.py` (`det_preprocess`/`det_postprocess`);
+  - `src/docguard/pipeline/processing.py` (`det_preprocess`);
   - `serving/model_repository/text_det/config.pbtxt`;
   - `data/synth_ocr/receipts/`, `data/processed/{annotations.jsonl,splits.json}`.
 - Môi trường: `.venv` hiện **chưa có torch**, cần `pip install -e ".[train,export]"`.

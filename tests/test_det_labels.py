@@ -91,3 +91,16 @@ def test_dataset_eval_mode_returns_raw_image_and_boxes(tmp_path):
     s = ds[0]
     assert s["image"].shape == (900, 600, 3)
     assert s["boxes"] == [[55, 175, 260, 210], [60, 400, 300, 430]]
+
+
+def test_record_polys_ignores_empty_text_and_uses_bbox_corners():
+    # AC-3: empty text is ignored; MC-OCR records without polygon use the 4 bbox corners.
+    pytest.importorskip("torch")
+    from docguard.train.det_dataset import record_polys
+
+    rec = {"boxes": [{"bbox": [10, 20, 110, 40], "text": " "}, {"bbox": [0, 0, 50, 30], "text": "###"},
+                     {"polygon": [[1, 2], [3, 2], [3, 4], [1, 4]], "bbox": [1, 2, 3, 4], "text": "a"}]}
+    polys, ignore = record_polys(rec)
+    assert ignore == [True, True, False]
+    assert polys[0].tolist() == [[10, 20], [110, 20], [110, 40], [10, 40]]
+    assert polys[2].tolist() == [[1, 2], [3, 2], [3, 4], [1, 4]]

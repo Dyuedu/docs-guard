@@ -20,7 +20,7 @@ def model():
     return DBNet(pretrained=False)
 
 
-@pytest.mark.parametrize("n,s", [(1, 640), (2, 640), (1, 960)])
+@pytest.mark.parametrize("n,s", [(1, 640), (2, 640), (1, 960), (2, 960)])
 def test_forward_shapes_train_eval(model, n, s):
     x = torch.randn(n, 3, s, s)
     model.train()

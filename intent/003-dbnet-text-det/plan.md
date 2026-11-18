@@ -140,3 +140,13 @@ Với `persistent_workers`, gọi `set_epoch` ở main process không tới đư
   - Ước tính 3090 nhanh hơn 3060 Laptop khoảng 2,5–3 lần, tức 110–130 ảnh/s. Muốn GPU không phải chờ thì cần khoảng 10 worker Xeon E5 v4, giả định mỗi worker đạt 11–13 ảnh/s (đây là ước tính chưa đo). 16 worker cho dư địa vừa phải, nên **chưa cần vector hóa `make_border_map`**.
   - Lần chạy thử 15 phút sẽ xác nhận. Nếu `imgs_per_s` dừng ở khoảng 16 × (tốc độ một worker) và GPU-util thấp, thì nghẽn ở CPU.
   - Ở 110 ảnh/s, 100k iteration (800k ảnh) mất khoảng 2 giờ, dưới ngưỡng 6 giờ.
+
+### D9 — Sau verifier (2026-11-18)
+- **Major:** `scripts/eval_det.py` crash khi log vào `./mlruns` mặc định, vì thiếu phần thiết lập file store của D4.
+  - Commit test tái hiện trước (`a38b12d`, thấy FAIL), rồi mới sửa: tách `setup_mlflow()` thành hàm dùng chung cho train và eval.
+- **Minor:**
+  - AC-1 thêm ca (N = 2, S = 960);
+  - thêm test cho `record_polys`: text rỗng hoặc `###` bị bỏ qua, MC-OCR dùng 4 góc bbox;
+  - `NOTICE` liệt kê đủ các file MMOCR và DBNet.pytorch;
+  - smoke test giới hạn `MLFLOW_ALLOW_FILE_STORE` trong phạm vi test.
+- **Ngoài bảng "Files to change":** thay đổi ở `docs/plan.md` (train trên 3090) và comment trong `scripts/setup_cloud.sh` thuộc commit duyệt intent `8775e80` của owner, có từ trước khi implement.

@@ -19,6 +19,7 @@ def test_smoke_two_iters(tmp_path, monkeypatch):
     data.mkdir()
     jp = _write_fixture(data, n=2)
     monkeypatch.setenv("MLFLOW_TRACKING_URI", (tmp_path / "mlruns").as_uri())
+    monkeypatch.setenv("MLFLOW_ALLOW_FILE_STORE", "true")  # scoped: setup_mlflow uses setdefault
     cfg = {
         "model": "dbnet", "seed": 0, "pretrained": False, "run_name": "smoke",
         "data": {"train": [jp], "val": jp, "image_root": None, "input_size": 960, "crop_size": 64,

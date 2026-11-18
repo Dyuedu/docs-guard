@@ -13,6 +13,12 @@ PaddleOCR — Copyright (c) PaddlePaddle Authors. https://github.com/PaddlePaddl
 
 MMOCR — Copyright (c) OpenMMLab. https://github.com/open-mmlab/mmocr
   mmocr/models/textdet/module_losses/db_module_loss.py -> src/docguard/train/det_loss.py
+  mmocr/models/common/losses/bce_loss.py              -> src/docguard/train/det_loss.py
+  mmocr/models/common/losses/dice_loss.py             -> src/docguard/train/det_loss.py
+  mmocr/models/common/losses/l1_loss.py               -> src/docguard/train/det_loss.py
+
+The PaddleOCR label / crop code in turn follows WenmuZhou/DBNet.pytorch
+(Apache-2.0), https://github.com/WenmuZhou/DBNet.pytorch.
 
 Ported files were modified (functional interfaces, PyTorch instead of Paddle,
 see the header of each file).

@@ -134,7 +134,7 @@ def train_det(cfg: dict, device: str | None = None) -> dict:
                 raise FloatingPointError(f"non-finite loss at iter {it}")
             if it % log_every == 0 or it == iters:
                 dt = time.time() - t0
-                mlflow.log_metrics({k: float(v) for k, v in losses.items()} |
+                mlflow.log_metrics({k: v.detach().item() for k, v in losses.items()} |
                                    {"lr": opt.param_groups[0]["lr"], "imgs_per_s": seen / max(dt, 1e-9)}, step=it)
                 t0, seen = time.time(), 0
             if it % eval_every == 0 or it == iters:

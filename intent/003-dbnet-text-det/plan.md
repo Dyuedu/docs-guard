@@ -112,3 +112,18 @@ Với `persistent_workers`, gọi `set_epoch` ở main process không tới đư
 - Sửa: lấy kích thước kernel từ `cv2.minAreaRect(contour)` (giống PaddleOCR `DBPostProcess`), unclip hình chữ nhật xoay, rồi trả bbox thẳng của nó. Hợp đồng serving (box thẳng) không đổi. Với kernel thẳng trục, cách này cho kết quả trùng D1 (rw = bw − 1).
 - Sau khi sửa, cùng phép thử GT cho H-mean 0,9995, IoU trung bình 0,876; checkpoint overfit cũ đạt H-mean 0,99.
 - Test mới `test_det_postprocess_skewed_line_recovers_gt_bbox` (30×300, nghiêng 3° và −5°, IoU ≥ 0,85): trước khi sửa FAIL (0,58 và 0,53), sau khi sửa PASS.
+
+### Kết quả AC-8b — overfit trên RTX 3060 Laptop (2026-11-18)
+- Thiết lập: 10 ảnh synth train đầu tiên, 1.000 iteration, batch 8, warmup 100, ImageNet pretrained, AMP, 2 worker. Tham số còn lại theo `text_det.yaml`. MLflow ghi vào thư mục scratch (không ghi `mlruns/` của repo).
+- **MLflow run `ecc59bb76a4e4da4abdfbb4e20a00dd9`**, H-mean trên chính 10 ảnh đó qua `evaluate_det`:
+
+  | Iteration | 250 | 500 | 750 | 1.000 |
+  |---|---|---|---|---|
+  | H-mean | 0,729 | 0,953 | 0,982 | **0,990** |
+
+  Tại iteration 1.000: P = 0,985, R = 0,995, IoU trung bình 0,757. **Đạt** (≥ 0,90).
+- Thông tin thêm:
+  - 4,18 triệu tham số; `best.pt` 16,2 MB;
+  - VRAM tối đa 2,7 GB;
+  - khoảng 37 ảnh/s trên 3060 Laptop. Con số này chỉ mang tính tham khảo; tốc độ trên 3090 sẽ đo ở bước 12.
+- Lần chạy trước khi có D8 (run `6f365670695d43c9be8bb799457554f5`, postprocess cũ): H-mean 0,79.

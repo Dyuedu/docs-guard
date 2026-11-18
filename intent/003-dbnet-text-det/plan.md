@@ -208,3 +208,12 @@ Precision MC-OCR (0,137) không có ý nghĩa, vì chỉ 4 trường được g�
 **File:**
 - `results/text_det/v1_{synth_val,mcocr_val}.json` (thư mục `results/` nằm trong gitignore);
 - `best.pt`, `last.pt` và `mlruns/` ở thư mục scratch, owner tự chuyển vào `artifacts/` và `mlruns/`.
+
+**Quyết định của owner (2026-11-19):** chấp nhận v1.
+- v1 đạt có điều kiện: AC-10(a) đạt; AC-10(b) = 0,720, dưới ngưỡng, ghi nhận và **không hạ ngưỡng**.
+- Checkpoint v1 dùng làm model sinh pseudo-label cho intent 1.5.
+- Mở intent mới cho v2 để xử lý ba nguyên nhân trên:
+  - synth in dòng sát hơn và nhiều trường trên cùng một dòng;
+  - augment xoay 90°;
+  - fine-tune bằng pseudo-label MC-OCR.
+- Đã trả máy thuê sau khi chép kết quả về (checksum khớp).

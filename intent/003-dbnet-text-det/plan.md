@@ -127,3 +127,16 @@ Với `persistent_workers`, gọi `set_epoch` ở main process không tới đư
   - VRAM tối đa 2,7 GB;
   - khoảng 37 ảnh/s trên 3060 Laptop. Con số này chỉ mang tính tham khảo; tốc độ trên 3090 sẽ đo ở bước 12.
 - Lần chạy trước khi có D8 (run `6f365670695d43c9be8bb799457554f5`, postprocess cũ): H-mean 0,79.
+
+### Đo throughput trước khi thuê 3090 (2026-11-18, máy local i5-10500H + RTX 3060 Laptop)
+- **Dataloader, 1 worker** (150 ảnh synth train, cấu hình `text_det.yaml`): 52,6 ms/ảnh, tức khoảng 19 ảnh/s mỗi worker.
+  - `make_border_map`: 43%;
+  - crop, resize, rotate: 33%;
+  - đọc ảnh: 21%;
+  - `make_shrink_map`: 3%.
+- **GPU thuần** (batch giả 8×640, AMP, forward + backward + Adam): 43 ảnh/s trên 3060 Laptop, VRAM 2,7 GB.
+- Kết luận cho bước 12:
+  - Lần overfit 37 ảnh/s bị nghẽn ở CPU (2 worker × 19 ảnh/s), chưa phải giới hạn GPU.
+  - Ước tính 3090 nhanh hơn 3060 Laptop khoảng 2,5–3 lần, tức 110–130 ảnh/s. Muốn GPU không phải chờ thì cần khoảng 10 worker Xeon E5 v4, giả định mỗi worker đạt 11–13 ảnh/s (đây là ước tính chưa đo). 16 worker cho dư địa vừa phải, nên **chưa cần vector hóa `make_border_map`**.
+  - Lần chạy thử 15 phút sẽ xác nhận. Nếu `imgs_per_s` dừng ở khoảng 16 × (tốc độ một worker) và GPU-util thấp, thì nghẽn ở CPU.
+  - Ở 110 ảnh/s, 100k iteration (800k ảnh) mất khoảng 2 giờ, dưới ngưỡng 6 giờ.

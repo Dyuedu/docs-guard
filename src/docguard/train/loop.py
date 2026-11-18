@@ -157,6 +157,7 @@ def train_det(cfg: dict, device: str | None = None) -> dict:
                     stale += 1
                     if patience and stale >= patience:
                         break
+                t0, seen = time.time(), 0  # keep eval + checkpoint time out of imgs_per_s
         if device == "cuda":
             mlflow.log_metric("max_vram_gb", torch.cuda.max_memory_allocated() / 2**30)
         mlflow.log_metric("best_val_hmean", best)

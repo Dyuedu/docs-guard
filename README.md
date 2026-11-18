@@ -69,7 +69,11 @@ Converter đã được kiểm tra với bản public MC-OCR (cột `img_id`, `a
 
 ```bash
 pip install -e ".[train,export]"
-# train models (chưa có, xem Roadmap) → artifacts/*.onnx
+# DBNet text detection (intent 003, xem intent/003-dbnet-text-det/plan.md). MLflow: $MLFLOW_TRACKING_URI, mặc định ./mlruns
+python scripts/train.py --config configs/train/text_det.yaml                      # → artifacts/train/text_det/<run>/best.pt
+python scripts/eval_det.py --ckpt artifacts/train/text_det/<run>/best.pt --data synth_val --out results/text_det/v1_synth_val.json
+python scripts/eval_det.py --ckpt artifacts/train/text_det/<run>/best.pt --data mcocr_val --out results/text_det/v1_mcocr_val.json
+# các model khác (tamper_seg, CRNN) chưa có, xem Roadmap → artifacts/*.onnx
 # INT8: docguard.export.onnx_export.quantize_int8_static(...)
 docker compose run --rm triton bash /workspace/scripts/build_trt.sh
 ```

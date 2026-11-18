@@ -25,6 +25,7 @@ def export_onnx(
         torch.onnx.export(
             model, dummy_input, str(path), input_names=[input_name], output_names=[output_name],
             dynamic_axes=dynamic_axes, opset_version=opset, do_constant_folding=True,
+            dynamo=False,  # TorchScript exporter: stable dynamic_axes, no onnxscript dependency
         )
     import onnx
 

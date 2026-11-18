@@ -1,23 +1,32 @@
-# DBNet (MobileNetV3-large + FPN + DB head). See plan §2.1.
+# DBNet (MobileNetV3-large + FPN + DB head). See plan §2.1 and intent/003-dbnet-text-det/spec.md.
 model: dbnet
 seed: 42
+pretrained: true                 # torchvision MobileNet_V3_Large_Weights.IMAGENET1K_V2
 data:
-  train: [data/synth_ocr/receipts/train.jsonl]   # v2 adds data/processed/pseudo_det_train.jsonl
-  val: data/synth_ocr/receipts/val.jsonl
-  image_root: .
+  train: [data/synth_ocr/receipts/train/index.jsonl]   # v2 adds data/processed/pseudo_det_train.jsonl
+  val: data/synth_ocr/receipts/val/index.jsonl
+  image_root: null       # null: image paths are relative to each index.jsonl's folder
   input_size: 960        # must match configs/pipeline.yaml text_det.input_size
-  shrink_ratio: 0.4
+  shrink_ratio: 0.4      # must match configs/pipeline.yaml text_det.shrink_ratio (checked at start)
   thresh_min: 0.3
   thresh_max: 0.7
+  min_text_size: 8
+  crop_size: 640
+  scale_range: [0.7, 1.3]        # long side = 960 * s before the crop
+  rotate_deg: 5
 train:
-  epochs: 300
+  iters: 100000
   batch_size: 8
-  lr: 0.001
+  lr: 0.001              # Adam, poly decay power 0.9
+  warmup_iters: 1000
   weight_decay: 0.0001
   amp: true
-  num_workers: 8
+  num_workers: 16
+  log_every: 50
+  eval_every: 5000
+  early_stop_patience: 5         # consecutive evals without H-mean improvement
   ohem_ratio: 3.0
-  loss_weights: {prob: 1.0, binary: 1.0, thresh: 10.0}
+  loss_weights: {prob: 5.0, binary: 1.0, thresh: 10.0}
   init: null             # path to v1 checkpoint when fine-tuning v2
 out_dir: artifacts/train/text_det
 mlflow_experiment: text_det

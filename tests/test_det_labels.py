@@ -39,3 +39,55 @@ def test_threshold_map_values():
     assert t[104, 200] == pytest.approx(0.3 + 0.4 * (1 - 4 / D), abs=1e-3)  # AC-4 formula
     assert m[94, 200] == 1.0 and m[110, 200] == 1.0  # inside polygon dilated by D
     assert m[90, 200] == 0.0 and m[50, 200] == 0.0
+
+
+def _write_fixture(root, n=2):
+    import json
+
+    import cv2
+
+    (root / "images").mkdir()
+    lines = []
+    for i in range(n):
+        img = np.full((900, 600, 3), 255, np.uint8)
+        cv2.putText(img, "HOA DON 123", (60, 200), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
+        cv2.imwrite(str(root / "images" / f"{i}.jpg"), img)
+        boxes = [
+            {"polygon": [[55, 175], [260, 175], [260, 210], [55, 210]], "bbox": [55, 175, 260, 210], "text": "HOA DON"},
+            {"bbox": [60, 400, 300, 430], "text": "TONG"},
+        ]
+        lines.append(json.dumps({"image": f"images/{i}.jpg", "height": 900, "width": 600, "boxes": boxes}))
+    (root / "index.jsonl").write_text("\n".join(lines), encoding="utf-8")
+    return str(root / "index.jsonl")
+
+
+DS_CFG = {"input_size": 960, "crop_size": 640, "scale_range": [0.7, 1.3], "rotate_deg": 5,
+          "shrink_ratio": 0.4, "thresh_min": 0.3, "thresh_max": 0.7, "min_text_size": 8}
+
+
+def test_dataset_deterministic(tmp_path):
+    # AC-9: same seed and index -> identical crop and identical 4 label maps.
+    pytest.importorskip("torch")
+    from docguard.train.det_dataset import DetDataset
+
+    jp = _write_fixture(tmp_path)
+    a, b = DetDataset([jp], None, True, DS_CFG, seed=7), DetDataset([jp], None, True, DS_CFG, seed=7)
+    keys = ["image", "shrink_map", "shrink_mask", "thresh_map", "thresh_mask"]
+    for idx in range(2):
+        sa, sb = a[idx], b[idx]
+        assert tuple(sa["image"].shape) == (3, 640, 640)
+        for k in keys[1:]:
+            assert tuple(sa[k].shape) == (640, 640)
+        for k in keys:
+            assert np.array_equal(sa[k].numpy(), sb[k].numpy()), k
+
+
+def test_dataset_eval_mode_returns_raw_image_and_boxes(tmp_path):
+    pytest.importorskip("torch")
+    from docguard.train.det_dataset import DetDataset
+
+    ds = DetDataset([_write_fixture(tmp_path, 1)], None, False, {}, seed=0)
+    assert len(list(ds)) == 1  # iteration terminates (evaluate_det iterates the val set)
+    s = ds[0]
+    assert s["image"].shape == (900, 600, 3)
+    assert s["boxes"] == [[55, 175, 260, 210], [60, 400, 300, 430]]

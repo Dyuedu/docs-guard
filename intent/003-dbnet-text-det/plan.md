@@ -150,3 +150,24 @@ Với `persistent_workers`, gọi `set_epoch` ở main process không tới đư
   - `NOTICE` liệt kê đủ các file MMOCR và DBNet.pytorch;
   - smoke test giới hạn `MLFLOW_ALLOW_FILE_STORE` trong phạm vi test.
 - **Ngoài bảng "Files to change":** thay đổi ở `docs/plan.md` (train trên 3090) và comment trong `scripts/setup_cloud.sh` thuộc commit duyệt intent `8775e80` của owner, có từ trước khi implement.
+
+### D10 — Train trên RTX 5060 Ti thuê thay cho 3090 (owner chọn 2026-11-18)
+**Máy và cách chọn**
+- 3090 hết máy. Owner chọn máy ezyclouds: RTX 5060 Ti 16 GB (Blackwell), i5-14600KF 18 nhân, 27 GB RAM, Ubuntu 24.04, 7.000 đ/giờ.
+- Môi trường: torch 2.11.0+cu128 (Blackwell cần cu128 trở lên). Trên máy này: 134 test pass, 1 skip (test chỉ chạy trên Windows).
+- Không chạy `setup_cloud.sh`, vì máy không có sudo và việc train không cần Docker.
+
+**Chạy thử 3.000 iteration** (16 worker, run `8664395e3e434f2bbdb142e9e0036346`)
+- Khoảng 73 ảnh/s, GPU-util 98%, CPU khoảng 17%: GPU là chỗ nghẽn, đạt ngưỡng 37 ảnh/s.
+- H-mean synth val: 0,817 (iteration 1.000) → 0,915 (2.000) → 0,946 (3.000).
+- Xem trước MC-OCR val với checkpoint chạy thử: recall 0,719. Theo trường: TOTAL_COST 0,861, ADDRESS 0,718, SELLER 0,697, TIMESTAMP 0,525.
+
+**Hai bug phát hiện khi chạy trên Linux**, đều đã có test tái hiện commit trước và FAIL trước khi sửa:
+1. `imgs_per_s` tính gộp thời gian eval vào cửa sổ đo, ra 14 thay vì 73 ảnh/s, có thể kích hoạt nhầm luật dừng "< 37 ảnh/s".
+   - Test `65f7fc1`, sửa `f2d991c`: reset cửa sổ đo sau eval và lưu checkpoint.
+2. **Deadlock của DataLoader dùng fork.**
+   - Lần chạy đầy đủ đầu tiên (run `4d91dbdd81964c51a913b8c55c23fdee`, đã dừng tay) treo ngay từ đầu: mọi thread của worker kẹt ở `futex`, thread pin của tiến trình chính chờ socket, GPU 0%.
+   - Nguyên nhân: fork từ một tiến trình đã có khoảng 42 thread (torch, OpenCV, MLflow). Lỗi ngẫu nhiên, nên lần chạy thử không gặp; trên Windows không gặp vì Windows luôn dùng spawn.
+   - Test `3babc94`, sửa `d09e0d9`: worker khởi động bằng `spawn` trên mọi hệ điều hành; mỗi worker đặt `cv2.setNumThreads(0)` và `torch.set_num_threads(1)` (theo mmengine `set_multi_processing`).
+
+**Lần train đầy đủ:** run `a27386451d79430d8b0594d914f4c4df` (`v1_100k_r2`), bắt đầu 22:59 ngày 2026-11-18.

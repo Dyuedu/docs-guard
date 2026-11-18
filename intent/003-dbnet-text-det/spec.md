@@ -146,6 +146,9 @@ train:
      - Việc này **trái với intent** (intent ghi `processing.py` chỉ đọc, không sửa), nên cần owner duyệt.
      - Không vi phạm luật "eval vs B0", vì B0 chưa đo; B0 sẽ đo **với** postprocess mới.
      - Test hiện có `test_det_postprocess_maps_back_to_image_coords` vẫn đúng.
+     - **Cập nhật khi implement (owner duyệt 2026-11-18), chi tiết xem plan.md §Deviations:**
+       - **D1:** kích thước kernel tính theo tọa độ đỉnh contour (bw − 1). Ngưỡng test unclip là IoU ≥ 0,85 cho mỗi box và cho trung bình (như AC-7), thay cho 0,95, vì 0,95 không đạt được khi kernel GT được raster hóa.
+       - **D8:** w′, h′ lấy từ `cv2.minAreaRect(contour)` thay cho bbox thẳng. Unclip hình chữ nhật xoay, rồi output là bbox thẳng của nó. Lý do: chữ nghiêng 3–5° làm box cao khoảng 1,4 lần; trước khi sửa, GT roundtrip trên synth val chỉ đạt H-mean 0,80, sau khi sửa đạt 0,9995.
    - **(B)** Giữ code, quét `unclip_ratio` ∈ {1,5; 2,0; 2,5; 3,0} trên synth val. Rẻ hơn, nhưng mô phỏng cho thấy dòng dài vẫn chỉ đạt IoU khoảng 0,7. AC-7 phải hạ yêu cầu IoU trung bình.
 2. **[Đã chốt 2026-11-12: thêm torch CPU vào CI] CI chưa có torch.** CI chỉ cài `.[dev]`, nên các test AC-1/2/5/8 sẽ bị skip trên CI. Đề xuất thêm vào `ci.yml` bước cài `torch` và `torchvision` bản CPU (index `download.pytorch.org/whl/cpu`), `onnx`, `onnxruntime` (CPU) và `pyclipper`. CI chậm thêm khoảng 1–2 phút. Test model dùng `pytest.importorskip("torch")` để vẫn chạy được ở môi trường thiếu torch.
 3. **`.venv` local chưa có torch.** Cần cài bản CUDA cho RTX 3060 (`pip install -e ".[train,export]"`, torch cu12x).
@@ -158,5 +161,5 @@ train:
 - Pseudo-label MC-OCR (1.5) và fine-tune DBNet v2.
 - Build TensorRT, FP16/INT8, pruning (giai đoạn 4). Ở đây chỉ có test export ONNX và parity.
 - Đo latency và VRAM inference (giai đoạn 3, trên T4).
-- Postprocess dạng polygon, box xoay (`minAreaRect`).
+- Output dạng polygon hoặc box xoay: output của `det_postprocess` và hợp đồng serving vẫn là box thẳng `[x1,y1,x2,y2]`. `minAreaRect` chỉ dùng nội bộ để tính độ dày kernel khi unclip (plan.md D8, owner duyệt 2026-11-18).
 - Sửa `serving/model_repository/text_det/config.pbtxt`.

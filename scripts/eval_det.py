@@ -75,6 +75,9 @@ def main() -> None:
     if m["mlflow_run_id"]:
         import mlflow
 
+        from docguard.train.loop import setup_mlflow
+
+        setup_mlflow()
         with mlflow.start_run(run_id=m["mlflow_run_id"]):
             mlflow.log_metrics({f"{args.data}_{k}": m[k] for k in ("precision", "recall", "hmean", "mean_iou")})
             mlflow.log_artifact(str(out))

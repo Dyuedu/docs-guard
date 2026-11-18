@@ -43,6 +43,21 @@ def _flatten(d: dict, prefix: str = "") -> dict[str, str]:
     return out
 
 
+def setup_mlflow() -> str:
+    """Point MLflow at $MLFLOW_TRACKING_URI, default ./mlruns. Used by training and scripts/eval_det.py.
+
+    Spec 003: runs live in a plain mlruns/ folder the owner copies back from the rented GPU.
+    MLflow >= 3.x refuses the file store unless MLFLOW_ALLOW_FILE_STORE is set (plan D4).
+    """
+    import mlflow
+
+    uri = os.environ.get("MLFLOW_TRACKING_URI", "./mlruns")
+    if "://" not in uri or uri.startswith("file:"):
+        os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
+    mlflow.set_tracking_uri(uri)
+    return uri
+
+
 def _check_shrink_ratio(cfg: dict, pipe: dict) -> None:
     a, b = cfg["data"]["shrink_ratio"], pipe["text_det"]["shrink_ratio"]
     if a != b:
@@ -85,12 +100,7 @@ def train_det(cfg: dict, device: str | None = None) -> dict:
     ckpt_dir = Path(cfg["out_dir"]) / run_name
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    uri = os.environ.get("MLFLOW_TRACKING_URI", "./mlruns")
-    if "://" not in uri or uri.startswith("file:"):
-        # Spec 003: runs live in a plain mlruns/ folder the owner copies back from the rented GPU.
-        # MLflow >= 3.x refuses the file store unless this opt-out is set.
-        os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
-    mlflow.set_tracking_uri(uri)
+    setup_mlflow()
     mlflow.set_experiment(cfg.get("mlflow_experiment", "text_det"))
     best, stale, it = -1.0, 0, 0
     with mlflow.start_run(run_name=run_name) as run:

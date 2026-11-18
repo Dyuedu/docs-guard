@@ -83,3 +83,32 @@ python scripts/eval_det.py --ckpt artifacts/train/text_det/<run>/best.pt --data 
   - bw: trung bình 0,834–0,866;
   - không box nào có IoU < 0,5.
 - Chốt: dùng **bw−1** và làm tròn đến số nguyên gần nhất. Test kiểm từng box có IoU ≥ 0,85 và IoU trung bình ≥ 0,85, đúng ngưỡng AC-7.
+
+### D2 — Đường dẫn data trong `text_det.yaml`
+Dữ liệu synth (intent 002) nằm ở `data/synth_ocr/receipts/{train,val}/index.jsonl`, với đường dẫn ảnh tương đối theo thư mục chứa file jsonl. Config cũ trỏ tới `receipts/train.jsonl`, file này không tồn tại. Đã sửa đường dẫn và đặt `image_root: null`, nghĩa là ảnh được tìm theo thư mục của từng file jsonl.
+
+### D3 — `export_onnx` dùng exporter TorchScript (`dynamo=False`)
+Torch 2.11 mặc định dùng exporter dynamo, exporter này cần thêm gói `onnxscript`. Exporter TorchScript đã ổn định với `dynamic_axes` và TensorRT. AC-2 (khớp pbtxt, batch động, parity < 1e-3) đạt với exporter này.
+
+### D4 — MLflow file store
+MLflow 3.18 từ chối backend thư mục `./mlruns`. Spec quy định dùng thư mục này để owner chép về từ máy thuê. `loop.py` đặt `MLFLOW_ALLOW_FILE_STORE=true` (cờ opt-out chính thức của MLflow), và chỉ đặt khi tracking URI là thư mục.
+
+### D5 — RNG augment theo (seed, index), không dùng `set_epoch`
+Với `persistent_workers`, gọi `set_epoch` ở main process không tới được worker. Thay vào đó, `EpochOffsetSampler` sinh index `epoch·N + i`, và dataset dùng `index % N` để chọn ảnh, dùng `(seed, index)` làm seed RNG. AC-9 vẫn đạt. Ở chế độ eval, dataset index chặt để vòng lặp dừng đúng ở `len()`; lỗi này được phát hiện khi smoke test bị treo và đã có test kèm theo.
+
+### D6 — Thứ tự test-first
+- Bước 2–4: viết test trước và đã thấy FAIL.
+- Bước 5–9: viết test cùng lúc với code trong khi chờ tải torch (2,7 GB), nên không quan sát được lần chạy FAIL trước khi implement.
+- Expected values vẫn lấy từ spec: D, IoU 5320/7080, P/R/H của ca (b), BCE OHEM tính tay, pbtxt.
+
+### D7 — Môi trường
+- Đã cài torch 2.11.0+cu128, torchvision 0.26, onnx 1.23, onnxruntime 1.32 (CPU), mlflow 3.18, pyclipper 1.4.
+- Cài `pip install -e . --no-deps` để `scripts/*.py` import được `docguard`.
+
+### D8 — Unclip từ `minAreaRect` (owner duyệt 2026-11-18; spec §Out of scope cần owner cập nhật)
+- Lần overfit đầu (run `6f365670695d43c9be8bb799457554f5`) đạt H-mean 0,79. Số box dự đoán khớp GT, nhưng box cao khoảng 1,4 lần.
+- Nguyên nhân: chữ synth nghiêng (trung vị 3–5°). Bbox thẳng của một kernel mảnh, dài và nghiêng cao hơn nhiều so với độ dày thật, nên d bị phóng to.
+- Đưa shrink map GT vào postprocess cũ (200 ảnh synth val, 3.965 box): H-mean 0,80, IoU trung bình 0,68. Nghĩa là AC-10(a) không thể đạt dù model hoàn hảo.
+- Sửa: lấy kích thước kernel từ `cv2.minAreaRect(contour)` (giống PaddleOCR `DBPostProcess`), unclip hình chữ nhật xoay, rồi trả bbox thẳng của nó. Hợp đồng serving (box thẳng) không đổi. Với kernel thẳng trục, cách này cho kết quả trùng D1 (rw = bw − 1).
+- Sau khi sửa, cùng phép thử GT cho H-mean 0,9995, IoU trung bình 0,876; checkpoint overfit cũ đạt H-mean 0,99.
+- Test mới `test_det_postprocess_skewed_line_recovers_gt_bbox` (30×300, nghiêng 3° và −5°, IoU ≥ 0,85): trước khi sửa FAIL (0,58 và 0,53), sau khi sửa PASS.

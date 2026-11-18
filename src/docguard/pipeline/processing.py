@@ -119,12 +119,14 @@ def det_postprocess(
             continue
         if float(prob[y : y + bh, x : x + bw][binary[y : y + bh, x : x + bw] > 0].mean()) < box_threshold:
             continue
-        # Kernel size in contour-vertex coordinates (bw - 1), the convention labels are rasterised in
-        # (fillPoly on offset vertices, as PaddleOCR MakeShrinkMap); see plan 003 Deviations.
-        kw, kh = bw - 1, bh - 1
-        d = unclip_distance(kw, kh, shrink_ratio)
-        x1, y1 = (x - d) / ratio, (y - d) / ratio
-        x2, y2 = (x + kw + d) / ratio, (y + kh + d) / ratio
+        # Kernel size from the min-area rotated rect of the contour (vertex coordinates, the convention
+        # labels are rasterised in; = bw - 1 for an axis-aligned kernel). Skewed lines would otherwise
+        # inflate the thickness and hence d. Unclip the rotated rect, output its axis-aligned bbox
+        # (plan 003 Deviations D1, D8; PaddleOCR DBPostProcess also unclips from minAreaRect).
+        (cx, cy), (rw, rh), angle = cv2.minAreaRect(c)
+        d = unclip_distance(rw, rh, shrink_ratio)
+        pts = cv2.boxPoints(((cx, cy), (rw + 2 * d, rh + 2 * d), angle)) / ratio
+        (x1, y1), (x2, y2) = pts.min(axis=0), pts.max(axis=0)
         boxes.append([max(0, round(x1)), max(0, round(y1)), min(w, round(x2)), min(h, round(y2))])
     return sorted(boxes, key=lambda b: (b[1], b[0]))
 

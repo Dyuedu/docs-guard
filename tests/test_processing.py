@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import pytest
 
 from docguard.pipeline import processing as P
 
@@ -65,6 +66,22 @@ def test_det_postprocess_exact_unclip_recovers_gt_box():
     assert len(boxes) == 2
     ious = [_iou(b, g) for b, g in zip(boxes, gts)]
     assert min(ious) >= 0.85 and np.mean(ious) >= 0.85, (boxes, ious)
+
+
+@pytest.mark.parametrize("deg", [3.0, -5.0])
+def test_det_postprocess_skewed_line_recovers_gt_bbox(deg):
+    # Plan 003 D8: synth/receipt lines are skewed a few degrees. GT kernel = the w x h rotated rect
+    # shrunk by D = A(1 - r^2)/L per side; the box must match the GT polygon's axis-aligned bbox.
+    r, (cx, cy), (w, h) = 0.4, (480.0, 300.0), (300.0, 30.0)
+    d = w * h * (1 - r * r) / (2 * (w + h))
+    gt_poly = cv2.boxPoints(((cx, cy), (w, h), deg))
+    gt = [*gt_poly.min(0), *gt_poly.max(0)]
+    prob = np.zeros((960, 960), np.float32)
+    kernel = cv2.boxPoints(((cx, cy), (w - 2 * d, h - 2 * d), deg))
+    cv2.fillPoly(prob, [np.round(kernel).astype(np.int32)], 1.0)
+    boxes = P.det_postprocess(prob, 1.0, 0.3, 0.6, r, (960, 960))
+    assert len(boxes) == 1
+    assert _iou(boxes[0], gt) >= 0.85, (boxes, gt)
 
 
 def test_det_postprocess_keeps_two_pixel_kernel():

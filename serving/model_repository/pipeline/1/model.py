@@ -61,7 +61,7 @@ class TritonPythonModel:
         t0 = time.perf_counter()
         det_in, ratio = P.det_preprocess(image, d["input_size"])
         prob = (await _infer("text_det", "image", "prob", det_in, 1))[0, 0]
-        boxes = P.det_postprocess(prob, ratio, d["bin_threshold"], d["box_threshold"], d["unclip_ratio"], image.shape[:2])
+        boxes = P.det_postprocess(prob, ratio, d["bin_threshold"], d["box_threshold"], d["shrink_ratio"], image.shape[:2])
         lines = []
         if boxes:
             crops = P.crop_for_rec(image, boxes, r["height"], r["width"])

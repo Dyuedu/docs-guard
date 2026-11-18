@@ -72,3 +72,14 @@ python scripts/eval_det.py --ckpt artifacts/train/text_det/<run>/best.pt --data 
 - **Windows DataLoader:** worker dùng `spawn`, nên dataset phải pickle được (không giữ handle file mở). Smoke test chạy với `num_workers=0`, overfit chạy với `num_workers=2`.
 
 ## Deviations (điền khi làm xong)
+
+### D1 — Ngưỡng test unclip (bước 2), owner duyệt 2026-11-18
+- Plan ghi IoU ≥ 0,95 cho box 20×200 và 30×600. Khi raster hóa kernel GT bằng `fillPoly` (giống PaddleOCR `MakeShrinkMap`), ngưỡng này không đạt được do sai số làm tròn đỉnh polygon.
+- Hai quy ước đã thử:
+  - **bw** (kích thước tính bằng số pixel): 20×200 → 0,948; 30×600 → 0,850.
+  - **bw−1** (kích thước theo tọa độ đỉnh contour): 20×200 → 0,891; 30×600 → 1,000.
+- Mô phỏng 3.000 box ngẫu nhiên (cao 12–40, rộng 80–600, seed 0):
+  - bw−1: IoU trung bình 0,921, p5 0,79, min 0,64;
+  - bw: trung bình 0,834–0,866;
+  - không box nào có IoU < 0,5.
+- Chốt: dùng **bw−1** và làm tròn đến số nguyên gần nhất. Test kiểm từng box có IoU ≥ 0,85 và IoU trung bình ≥ 0,85, đúng ngưỡng AC-7.

@@ -110,3 +110,23 @@ def test_imgs_per_s_excludes_eval_time(tmp_path, monkeypatch):
     # Window = iter 2 only (2 images, well under 1 s on CPU) once the eval at iter 1 is excluded;
     # with the 3 s eval included it is at most 4 images / 3 s = 1.33 img/s.
     assert ips > 2.0, ips
+
+
+def test_train_loader_uses_spawn_workers(tmp_path):
+    # Bug seen on the rented Linux GPU: fork-started DataLoader workers deadlocked (all threads in
+    # futex, no batch ever arrived) because the parent already ran torch/OpenCV/MLflow threads.
+    # Workers must be spawn-started (as on Windows) and single-threaded inside.
+    from docguard.train.det_dataset import DetDataset
+    from docguard.train.loop import make_train_loader
+
+    (tmp_path / "d").mkdir()
+    jp = _write_fixture(tmp_path / "d", n=2)
+    data = {"input_size": 960, "crop_size": 64, "scale_range": [1.0, 1.0], "rotate_deg": 0,
+            "min_text_size": 8, "shrink_ratio": 0.4, "thresh_min": 0.3, "thresh_max": 0.7}
+    ds = DetDataset([jp], None, True, data, seed=0)
+    loader = make_train_loader(ds, {"batch_size": 2, "num_workers": 1}, device="cpu", seed=0)
+    assert loader.multiprocessing_context.get_start_method() == "spawn"
+    assert loader.worker_init_fn is not None
+    batch = next(iter(loader))
+    assert tuple(batch["image"].shape) == (2, 3, 64, 64)
+    assert make_train_loader(ds, {"batch_size": 2, "num_workers": 0}, device="cpu", seed=0).multiprocessing_context is None

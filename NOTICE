@@ -1,0 +1,24 @@
+doc-guard
+=========
+
+This project contains code ported from the following projects, used under the
+Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
+
+PaddleOCR — Copyright (c) PaddlePaddle Authors. https://github.com/PaddlePaddle/PaddleOCR
+  ppocr/data/imaug/make_shrink_map.py    -> src/docguard/train/det_labels.py
+  ppocr/data/imaug/make_border_map.py    -> src/docguard/train/det_labels.py
+  ppocr/data/imaug/random_crop_data.py   -> src/docguard/train/det_dataset.py
+  ppocr/modeling/necks/db_fpn.py         -> src/docguard/models/dbnet.py
+  ppocr/modeling/heads/det_db_head.py    -> src/docguard/models/dbnet.py
+
+MMOCR — Copyright (c) OpenMMLab. https://github.com/open-mmlab/mmocr
+  mmocr/models/textdet/module_losses/db_module_loss.py -> src/docguard/train/det_loss.py
+  mmocr/models/common/losses/bce_loss.py              -> src/docguard/train/det_loss.py
+  mmocr/models/common/losses/dice_loss.py             -> src/docguard/train/det_loss.py
+  mmocr/models/common/losses/l1_loss.py               -> src/docguard/train/det_loss.py
+
+The PaddleOCR label / crop code in turn follows WenmuZhou/DBNet.pytorch
+(Apache-2.0), https://github.com/WenmuZhou/DBNet.pytorch.
+
+Ported files were modified (functional interfaces, PyTorch instead of Paddle,
+see the header of each file).

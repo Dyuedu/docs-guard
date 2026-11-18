@@ -93,8 +93,19 @@ def det_preprocess(image: np.ndarray, size: int) -> tuple[np.ndarray, float]:
     return to_chw(canvas)[None], r
 
 
+def unclip_distance(w: float, h: float, shrink_ratio: float) -> float:
+    """Exact inverse of the DB shrink for an axis-aligned w x h kernel (spec 003, concern 1A).
+
+    Training shrinks a W x H box by D = k*W*H / (2(W+H)), k = 1 - r^2. With W = w + 2d, H = h + 2d
+    this gives (8 - 4k) d^2 + 2(1 - k)(w + h) d - k*w*h = 0; return its positive root.
+    """
+    k = 1.0 - shrink_ratio**2
+    a, b, c = 8.0 - 4.0 * k, 2.0 * (1.0 - k) * (w + h), -k * w * h
+    return (-b + np.sqrt(b * b - 4.0 * a * c)) / (2.0 * a)
+
+
 def det_postprocess(
-    prob: np.ndarray, ratio: float, bin_threshold: float, box_threshold: float, unclip_ratio: float,
+    prob: np.ndarray, ratio: float, bin_threshold: float, box_threshold: float, shrink_ratio: float,
     image_shape: tuple[int, int],
 ) -> list[list[int]]:
     """Probability map (S,S) -> axis-aligned text boxes in image coordinates."""
@@ -104,16 +115,19 @@ def det_postprocess(
     boxes = []
     for c in contours:
         x, y, bw, bh = cv2.boundingRect(c)
-        if bw < 3 or bh < 3:
+        if bw < 2 or bh < 2:
             continue
         if float(prob[y : y + bh, x : x + bw][binary[y : y + bh, x : x + bw] > 0].mean()) < box_threshold:
             continue
-        # DB shrinks text regions during training; expand back (approximation of polygon unclip).
-        area, perim = bw * bh, 2 * (bw + bh)
-        d = area * unclip_ratio / perim
-        x1, y1 = (x - d) / ratio, (y - d) / ratio
-        x2, y2 = (x + bw + d) / ratio, (y + bh + d) / ratio
-        boxes.append([max(0, int(x1)), max(0, int(y1)), min(w, int(np.ceil(x2))), min(h, int(np.ceil(y2)))])
+        # Kernel size from the min-area rotated rect of the contour (vertex coordinates, the convention
+        # labels are rasterised in; = bw - 1 for an axis-aligned kernel). Skewed lines would otherwise
+        # inflate the thickness and hence d. Unclip the rotated rect, output its axis-aligned bbox
+        # (plan 003 Deviations D1, D8; PaddleOCR DBPostProcess also unclips from minAreaRect).
+        (cx, cy), (rw, rh), angle = cv2.minAreaRect(c)
+        d = unclip_distance(rw, rh, shrink_ratio)
+        pts = cv2.boxPoints(((cx, cy), (rw + 2 * d, rh + 2 * d), angle)) / ratio
+        (x1, y1), (x2, y2) = pts.min(axis=0), pts.max(axis=0)
+        boxes.append([max(0, round(x1)), max(0, round(y1)), min(w, round(x2)), min(h, round(y2))])
     return sorted(boxes, key=lambda b: (b[1], b[0]))
 
 

@@ -16,7 +16,7 @@ text_det:
   input_size: 960
   bin_threshold: 0.3
   box_threshold: 0.6
-  unclip_ratio: 1.5
+  shrink_ratio: 0.4     # must match configs/train/text_det.yaml data.shrink_ratio
 
 text_rec:
   height: 32

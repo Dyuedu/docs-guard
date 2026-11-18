@@ -16,8 +16,8 @@ Mục tiêu cuối: `docker compose up` chạy được pipeline thật trên T4
 
 Các quyết định đã chốt:
 
-- **Tự train từ đầu** DBNet, CRNN và CAT-Net-lite (MobileNetV3) bằng PyTorch.
-- **Thuê T4** cho cả train lẫn benchmark. Local RTX 3060 chỉ dùng để dev/debug với dữ liệu nhỏ.
+- **Tự train** DBNet, CRNN và CAT-Net-lite (MobileNetV3) bằng PyTorch: không dùng weight OCR/forensics có sẵn; backbone ImageNet pretrained được phép.
+- **Thuê RTX 3090 để train** (24 GB, AMP; chốt 2026-11-12 ở intent 003). **Benchmark B0–B5 và Locust vẫn chạy trên T4** như proposal. Local RTX 3060 chỉ dùng để dev/debug với dữ liệu nhỏ.
 
 Rủi ro chính đã biết:
 
@@ -71,7 +71,7 @@ Rủi ro chính đã biết:
 - Sau khi có DBNet v1, sinh box cho mọi dòng chữ trên MC-OCR rồi hợp nhất với box GT của 4 trường. Đây là tập fine-tune cho DBNet v2.
 - Phần text cho CRNN chỉ lấy từ crop GT, không dùng pseudo-label.
 
-## Giai đoạn 2 — Model và training (3–4 tuần, trên T4)
+## Giai đoạn 2 — Model và training (3–4 tuần, trên RTX 3090 thuê)
 
 Code chung: `src/docguard/models/`, `src/docguard/train/`, `scripts/train.py --config configs/train/<model>.yaml`.
 
@@ -183,7 +183,7 @@ Code chung: `src/docguard/models/`, `src/docguard/train/`, `scripts/train.py --c
 - Trả lời câu hỏi nghiên cứu: INT8 làm pixel-F1 giảm bao nhiêu so với CER (B3 vs B5).
 - Cập nhật README: kết quả, giới hạn, cách tái lập. Đánh dấu Roadmap.
 
-**Tổng thời gian:** khoảng 9–10 tuần. Thời gian thuê T4 ước tính 60–100 giờ, tập trung ở giai đoạn 2 và 4.
+**Tổng thời gian:** khoảng 9–10 tuần. Thời gian thuê GPU ước tính 60–100 giờ: RTX 3090 cho train (giai đoạn 2), T4 cho export/benchmark (giai đoạn 3–5).
 
 ---
 
@@ -205,7 +205,7 @@ Code chung: `src/docguard/models/`, `src/docguard/train/`, `scripts/train.py --c
 ## Verification theo từng mốc
 
 1. **Data:** `pytest` cho converter, splits (không trùng `img_id` giữa các split), synth_text (charset ⊆ vocab). Xem trực quan ảnh/mask mẫu.
-2. **Model:** mỗi model có unit test forward shape, `export_onnx` và parity < 1e-3. Overfit 10 mẫu trên local 3060 trước khi train trên T4.
+2. **Model:** mỗi model có unit test forward shape, `export_onnx` và parity < 1e-3. Overfit 10 mẫu trên local 3060 trước khi train trên RTX 3090 thuê.
 3. **Train:** đường cong MLflow. Ngưỡng tạm để đi tiếp: det H-mean ≥ 0.85, CER ≤ 5% trên crop GT, pixel-F1 ≥ 0.7 trên tập synth test.
 4. **Eval:** `evaluate.py --variant B0` cho ra đủ metric. Kết quả B1 lệch so với B0 dưới 0,1 điểm (kiểm tra parity runtime).
 5. **Serving:** `curl -F image=@x.jpg localhost:8080/v1/verify` trả JSON đúng schema. Kết quả Triton khớp `evaluate.py`.

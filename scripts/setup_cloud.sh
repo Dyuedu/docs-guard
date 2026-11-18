@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bootstrap a rented Ubuntu 22.04 GPU box (T4) for training + benchmarking.
+# Bootstrap a rented Ubuntu 22.04 GPU box (RTX 3090 for training, T4 for benchmarking).
 #
 #   REPO_URL=<git url> DATA_URL=<tar.gz url of data/> bash scripts/setup_cloud.sh
 #

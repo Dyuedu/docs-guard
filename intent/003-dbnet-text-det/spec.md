@@ -19,7 +19,7 @@ Ký hiệu: r = `shrink_ratio` = 0,4. Với polygon diện tích A, chu vi L, kh
 | AC-7 | **Đánh giá end-to-end đúng đường serving.** `evaluate_det` đi qua `P.det_preprocess`, model, rồi `P.det_postprocess`, với tham số đọc từ `configs/pipeline.yaml`. Dùng một "model giả" xuất **đúng shrink map GT** (lấy từ AC-3, tính trên ảnh letterbox) cho 2 ảnh fixture có dòng chữ 20×200 và 30×600 px (tọa độ ở 960). Kết quả phải là recall = 1,0 và P = 1,0 ở IoU 0,5, và IoU trung bình ≥ 0,85. Ca này **chỉ đạt được sau khi giải quyết Flagged concern 1**. | `tests/test_eval_det.py::test_gt_kernel_roundtrip` |
 | AC-8 | **Vòng train chạy được.** (a) Smoke test CPU: 2 iteration, ảnh 64×64, `pretrained=False`, loss hữu hạn, ghi được checkpoint và log MLflow vào thư mục tạm. (b) Overfit trên RTX 3060: 10 ảnh synth train, ≤ 1.000 iteration, H-mean trên chính 10 ảnh đó ≥ 0,90 (plan.md §Verification). Kết quả (b) ghi vào plan.md, kèm MLflow run id. | `tests/test_train_det.py::test_smoke_two_iters`; (b) chạy tay |
 | AC-9 | **Dataset tất định.** Cùng seed và cùng index → cùng ảnh crop và cùng 4 map label (so từng phần tử). | `tests/test_det_labels.py::test_dataset_deterministic` |
-| AC-10 | **Nghiệm thu v1** (intent, owner chốt 2026-11-12). Checkpoint tốt nhất của lần train 100k iteration trên RTX 3090 phải đạt: (a) H-mean ≥ 0,90 trên synth val (1.000 ảnh); (b) recall ≥ 0,80 trên 668 box GT 4 trường của MC-OCR **val** (SELLER 119, ADDRESS 202, TIMESTAMP 139, TOTAL_COST 208). Cả hai qua `evaluate_det`, IoU ≥ 0,5. Có MLflow run id. Report kèm recall theo từng trường và theo nhóm chiều cao box (xem Flagged concern 5). | `scripts/eval_det.py`, ghi vào plan.md |
+| AC-10 | **Nghiệm thu v1** (intent, owner chốt 2026-11-12). Checkpoint tốt nhất của lần train 100k iteration trên RTX 3090 phải đạt: (a) H-mean ≥ 0,90 trên synth val (1.000 ảnh); (b) recall ≥ 0,80 trên 668 box GT 4 trường của MC-OCR **val** (SELLER 119, ADDRESS 202, TIMESTAMP 139, TOTAL_COST 208). Cả hai qua `evaluate_det`, IoU ≥ 0,5. Có MLflow run id. Report kèm recall theo từng trường và theo nhóm chiều cao box (xem Flagged concern 5). | `scripts/eval_det.py`, ghi vào plan.md. **Kết quả 2026-11-19** (run `a27386451d79430d8b0594d914f4c4df`, train trên RTX 5060 Ti, xem plan.md D10): (a) **0,9992**, đạt; (b) **0,720**, không đạt. **Owner chấp nhận v1 có điều kiện**, ngưỡng không đổi (concern 6; plan.md, mục quyết định). |
 
 ## Interface / data contract
 
@@ -123,7 +123,7 @@ train:
 ## Non-functional
 | Loại | Ngưỡng | Đo bằng |
 |---|---|---|
-| Tốc độ train trên 3090 | Chạy thử 15 phút trước; nếu ước tính 100k iteration > 6 giờ (tức < 37 ảnh/s) thì **dừng, báo owner** trước khi chạy tiếp | log ảnh/s trong MLflow |
+| Tốc độ train trên 3090 | Chạy thử 15 phút trước; nếu ước tính 100k iteration > 6 giờ (tức < 37 ảnh/s) thì **dừng, báo owner** trước khi chạy tiếp | log ảnh/s trong MLflow. Thực tế train trên RTX 5060 Ti (plan.md D10): khoảng 73 ảnh/s, 3,2 giờ. |
 | VRAM train | ≤ 20 GB ở batch 8, crop 640, AMP | `torch.cuda.max_memory_allocated` |
 | Thời gian `pytest -q` thêm vào | ≤ 60 s trên CPU | CI |
 | Kích thước model | ghi lại số tham số và MB của file `.pt` (thông tin, không phải ngưỡng) | MLflow |
@@ -155,7 +155,7 @@ train:
 4. **`artifacts/` và `mlruns/` được bảo vệ** (CLAUDE.md, hook chặn). Claude không ghi vào đó ở local. Test dùng `tmp_path`. Train thật do owner chạy trên máy thuê theo lệnh trong plan.md, rồi owner chép `best.pt` và `mlruns/` về.
 5. **Một phần box GT của MC-OCR bao hai dòng** (chiều cao p95 là 56–90 px ở cạnh dài 1024, trong khi trung vị khoảng 25 px). DBNet tách theo từng dòng nên sẽ trượt các box này, làm recall AC-10(b) thấp hơn thực tế. Report sẽ chia recall theo nhóm chiều cao (≤ 1,6 lần trung vị của trường đó và > 1,6 lần) để thấy rõ. Ngưỡng 0,80 vẫn tính trên toàn bộ 668 box như owner đã chốt.
 6. **Khoảng cách synth → real.** v1 chỉ train trên dữ liệu tổng hợp. Nếu AC-10(b) không đạt 0,80, kết quả vẫn được ghi lại kèm run id, và owner quyết định: chấp nhận v1 làm mô hình sinh pseudo-label (1.5), hay sửa dữ liệu hoặc augment. Không hạ ngưỡng nếu owner chưa đồng ý.
-7. **Train và benchmark khác GPU.** Train trên RTX 3090, benchmark B0 trên T4. Checkpoint không phụ thuộc GPU; latency và VRAM đo ở giai đoạn 3 trên T4.
+7. **Train và benchmark khác GPU.** Train trên RTX 3090, benchmark B0 trên T4. Checkpoint không phụ thuộc GPU; latency và VRAM đo ở giai đoạn 3 trên T4. **Cập nhật 2026-11-19:** 3090 hết máy, owner chọn train trên RTX 5060 Ti 16 GB (Blackwell, torch cu128); xem plan.md D10.
 
 ## Out of scope
 - Pseudo-label MC-OCR (1.5) và fine-tune DBNet v2.

@@ -42,3 +42,36 @@ def test_smoke_two_iters(tmp_path, monkeypatch):
     run = mlflow.get_run(res["run_id"])
     assert math.isfinite(run.data.metrics["loss"])
     assert "val_hmean" in run.data.metrics
+
+
+def test_eval_det_script_logs_to_default_mlruns(tmp_path):
+    # Verifier finding: scripts/eval_det.py logs to the checkpoint's MLflow run, but without the
+    # file-store setup of loop.py (plan D4) MLflow 3.x cannot find ./mlruns and the script crashes.
+    import json
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[1]
+    (tmp_path / "d").mkdir()
+    jp = _write_fixture(tmp_path / "d", n=1)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("MLFLOW_")}
+    env["PYTHONPATH"] = os.pathsep.join([str(repo / "src"), str(repo)])
+    cfg = {
+        "model": "dbnet", "seed": 0, "pretrained": False, "run_name": "r",
+        "data": {"train": [jp], "val": jp, "image_root": None, "input_size": 960, "crop_size": 64,
+                 "scale_range": [1.0, 1.0], "rotate_deg": 0, "min_text_size": 8,
+                 "shrink_ratio": 0.4, "thresh_min": 0.3, "thresh_max": 0.7},
+        "train": {"iters": 1, "batch_size": 1, "lr": 0.001, "amp": False, "num_workers": 0,
+                  "warmup_iters": 0, "eval_every": 1, "log_every": 1},
+        "out_dir": "out", "mlflow_experiment": "t",
+    }
+    train = f"from docguard.train.loop import train_det; train_det({cfg!r}, device='cpu')"
+    subprocess.run([sys.executable, "-c", train], cwd=tmp_path, env=env, check=True, capture_output=True)
+    out = tmp_path / "res.json"
+    r = subprocess.run([sys.executable, str(repo / "scripts/eval_det.py"), "--ckpt", "out/r/best.pt",
+                        "--data", "synth_val", "--out", str(out), "--device", "cpu"],
+                       cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-2000:]
+    assert json.loads(out.read_text(encoding="utf-8"))["mlflow_run_id"]

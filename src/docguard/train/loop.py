@@ -35,6 +35,28 @@ def make_predict_prob(model: torch.nn.Module, device: str):
     return predict
 
 
+def _worker_init(_: int) -> None:
+    """Single-threaded workers: N workers x full-size OpenCV/torch pools only oversubscribe the CPU."""
+    import cv2
+
+    cv2.setNumThreads(0)
+    torch.set_num_threads(1)
+
+
+def make_train_loader(train_ds, t: dict, device: str, seed: int) -> torch.utils.data.DataLoader:
+    """Infinite shuffled loader. Workers are spawn-started on every OS: fork-started workers
+    deadlocked on Linux because the parent already runs torch / OpenCV / MLflow threads (plan D10).
+    Follows mmengine set_multi_processing (cv2.setNumThreads(0), one intra-op thread per worker).
+    """
+    workers = int(t.get("num_workers", 0))
+    return torch.utils.data.DataLoader(
+        train_ds, batch_size=t["batch_size"], sampler=EpochOffsetSampler(len(train_ds), seed),
+        num_workers=workers, pin_memory=device == "cuda", persistent_workers=workers > 0, drop_last=True,
+        multiprocessing_context="spawn" if workers > 0 else None,
+        worker_init_fn=_worker_init if workers > 0 else None,
+    )
+
+
 def _flatten(d: dict, prefix: str = "") -> dict[str, str]:
     out = {}
     for k, v in d.items():
@@ -78,11 +100,7 @@ def train_det(cfg: dict, device: str | None = None) -> dict:
     train_ds = DetDataset(d["train"], d.get("image_root"), True, d, seed)
     val_paths = d["val"] if isinstance(d["val"], list) else [d["val"]]
     val_ds = DetDataset(val_paths, d.get("image_root"), False, d, seed)
-    workers = int(t.get("num_workers", 0))
-    loader = torch.utils.data.DataLoader(
-        train_ds, batch_size=t["batch_size"], sampler=EpochOffsetSampler(len(train_ds), seed),
-        num_workers=workers, pin_memory=device == "cuda", persistent_workers=workers > 0, drop_last=True,
-    )
+    loader = make_train_loader(train_ds, t, device, seed)
 
     model = DBNet(pretrained=bool(cfg.get("pretrained", True))).to(device)
     if t.get("init"):

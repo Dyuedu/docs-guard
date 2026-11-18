@@ -171,3 +171,40 @@ Với `persistent_workers`, gọi `set_epoch` ở main process không tới đư
    - Test `3babc94`, sửa `d09e0d9`: worker khởi động bằng `spawn` trên mọi hệ điều hành; mỗi worker đặt `cv2.setNumThreads(0)` và `torch.set_num_threads(1)` (theo mmengine `set_multi_processing`).
 
 **Lần train đầy đủ:** run `a27386451d79430d8b0594d914f4c4df` (`v1_100k_r2`), bắt đầu 22:59 ngày 2026-11-18.
+
+## Kết quả AC-10 — train 100k iteration trên RTX 5060 Ti (2026-11-19)
+**MLflow run `a27386451d79430d8b0594d914f4c4df`** (`v1_100k_r2`)
+- Chạy đủ 100k iteration (early stop không kích hoạt), mất 3,21 giờ; khoảng 73 ảnh/s; VRAM tối đa 2,67 GB.
+- Model 4,18 triệu tham số; `best.pt` 16,2 MB, là checkpoint ở **iteration 90.000**.
+- H-mean synth val theo các lần eval: 0,968 (5k) → 0,991 (15k) → 0,998 (50k) → 0,9992 (90k) → 0,9988 (100k).
+
+| Tiêu chí | Ngưỡng | Kết quả | |
+|---|---|---|---|
+| (a) H-mean synth val (1.000 ảnh, 19.814 box) | ≥ 0,90 | **0,9992** (P 0,9989, R 0,9994, IoU trung bình 0,816) | **Đạt** |
+| (b) Recall MC-OCR val (668 box, 4 trường) | ≥ 0,80 | **0,720** (481/668; IoU trung bình 0,745) | **Không đạt** |
+
+Recall MC-OCR val theo trường và theo nhóm chiều cao (normal: cao ≤ 1,6 lần trung vị chiều cao của trường đó; tall: cao hơn):
+
+| Trường | Recall | n | normal | tall |
+|---|---|---|---|---|
+| TOTAL_COST | 0,846 | 208 | 0,870 (184) | 0,667 (24) |
+| SELLER | 0,782 | 119 | 0,788 (104) | 0,733 (15) |
+| ADDRESS | 0,767 | 202 | 0,786 (173) | 0,655 (29) |
+| TIMESTAMP | **0,410** | 139 | 0,408 (120) | 0,421 (19) |
+
+Precision MC-OCR (0,137) không có ý nghĩa, vì chỉ 4 trường được gán nhãn.
+
+**Phân tích các box bị trượt** (cùng checkpoint):
+- Chỉ 17/668 box thật sự không được phát hiện (IoU tốt nhất < 0,1).
+- 170 box có được phát hiện nhưng IoU nằm trong khoảng 0,1–0,5. Box dự đoán rộng khoảng gấp 2,09 lần và cao khoảng gấp 1,72 lần box GT (trung vị).
+- Kiểm tra trực quan cho thấy ba nguyên nhân:
+  1. dòng in sát nhau bị gộp theo chiều dọc (ví dụ "Tổng số" + "Tổng cộng", "Ngày bán" + "Quầy");
+  2. nhiều trường trên cùng một dòng bị gộp theo chiều ngang, trong khi MC-OCR chỉ gán nhãn một phần dòng (ví dụ "Số GD: … Ngày: …");
+  3. ảnh hóa đơn bị xoay 90°, trong khi augment chỉ xoay ±5°.
+- Lần chạy thử 3k iteration cho recall 0,719, gần như bằng 100k. Nghĩa là train thêm không thu hẹp được khoảng cách synth → real.
+
+**Theo spec, concern 6:** kết quả đã ghi kèm run id; owner quyết định có chấp nhận v1 hay không. Không hạ ngưỡng khi owner chưa đồng ý.
+
+**File:**
+- `results/text_det/v1_{synth_val,mcocr_val}.json` (thư mục `results/` nằm trong gitignore);
+- `best.pt`, `last.pt` và `mlruns/` ở thư mục scratch, owner tự chuyển vào `artifacts/` và `mlruns/`.
